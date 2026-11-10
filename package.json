@@ -1,0 +1,14 @@
+{
+  "name": "ledgerbridge",
+  "private": true,
+  "description": "Automated Enterprise MERN-to-SharePoint Excel Ledger Engine",
+  "scripts": {
+    "install:all": "npm --prefix server install && npm --prefix client install",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "typecheck": "npm --prefix server run typecheck && npm --prefix client run typecheck",
+    "build": "npm --prefix server run build && npm --prefix client run build",
+    "test": "npm --prefix server run test:e2e",
+    "check:schema": "node scripts/check-schemas.mjs"
+  }
+}

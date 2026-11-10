@@ -1,0 +1,38 @@
+{
+  "name": "ledgerbridge-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "LedgerBridge API: MongoDB outbox + SharePoint Excel ledger sync",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "typecheck": "tsc --noEmit",
+    "build": "npm run typecheck && tsc",
+    "start": "node dist/server.js",
+    "test:e2e": "tsx src/scripts/e2e.ts",
+    "auth:onedrive": "tsx src/scripts/authOneDrive.ts"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "@azure/msal-node": "^7.2.1",
+    "axios": "^1.21.0",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.10",
+    "exceljs": "^4.4.0",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.7.3",
+    "google-auth-library": "^11.3.4",
+    "helmet": "^8.3.0",
+    "mongoose": "^9.12.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.6",
+    "mongodb-memory-server": "^11.3.0",
+    "ts-node-dev": "^2.0.0",
+    "tsx": "^4.23.15",
+    "typescript": "~6.0.3"
+  }
+}
