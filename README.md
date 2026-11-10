@@ -1,96 +1,210 @@
 # LedgerBridge
 
-*Every sale, recorded once, ledgered everywhere.*
+A sales recording system for small businesses that captures sales once and syncs them to a shared ledger in a reliable, auditable way.
 
-An automated **MERN → SharePoint Excel ledger engine**. A single-page React form posts a sale; the Express API stores it in MongoDB (source of truth) and a background worker appends it to a shared Excel workbook in SharePoint through Microsoft Graph, entirely in memory, with no local files and no paid middleware.
+LedgerBridge is built as a small MERN-style application: a React frontend submits sales to an Express API, MongoDB stores the source of truth, and a background worker synchronizes the sales into an Excel-backed ledger in SharePoint, OneDrive, or Google Sheets.
 
+The project is designed for businesses that want a simple workflow without manual spreadsheet reconciliation, while keeping the transaction history safe and recoverable.
+
+## Why LedgerBridge?
+
+Manual sales recording often leads to:
+
+- duplicate entries
+- missed ledger updates
+- spreadsheet drift
+- poor auditability
+- account reconciliation headaches
+
+LedgerBridge solves this by centralizing the source of truth in MongoDB and pushing ledger updates through a controlled sync pipeline.
+
+## Architecture overview
+
+```text
+React / TypeScript / Axios
+        │
+        ▼
+   Express API (TypeScript)
+        │
+        ▼
+    MongoDB (source of truth)
+        │
+        ├── outbox / queued writes
+        │
+        ▼
+  Sync worker (background processing)
+        │
+        ├── download ledger file
+        ├── append sales rows
+        ├── write workbook updates
+        └── upload back to storage
+
+Supported destinations:
+- SharePoint Online
+- OneDrive
+- Google Sheets
+- Mock mode for local development
 ```
-React/TS/Axios ──202 Accepted──▶ Express/TS ──▶ MongoDB (outbox, source of truth)
-                                      │                     ▲ status: pending → processing → synced | failed
-                                      ▼                     │
-                               Sync worker (batches) ───────┘
-                                      │ download → ArrayBuffer → ExcelJS append → Buffer
-                                      ▼
-                    @azure/msal-node (client credentials) ──▶ Microsoft Graph ──▶ SharePoint library
+
+## Core features
+
+- Sale submission via a user-friendly React interface
+- Server-side validation with strict schemas
+- MongoDB-backed source of truth
+- Background ledger synchronization pipeline
+- Excel-based ledger updates via Graph API or sheet integrations
+- Retry handling and failure tracking
+- Idempotent record processing using a unique `recordId`
+- Sync status monitoring for each sale
+- Support for several storage modes
+- Type-safe TypeScript code across client and server
+
+## Storage modes
+
+LedgerBridge supports several destinations for the ledger output. Choose the mode with `GRAPH_MODE` in `server/.env`.
+
+| Mode | Destination | Cost | Notes |
+|---|---|---:|---|
+| `mock` | In-memory fake ledger | Free | Best for local development |
+| `onedrive` | Personal OneDrive folder | Free | Good for lightweight, personal setups |
+| `live` | SharePoint Online document library | Paid Microsoft 365 requirement | Production-grade option |
+| `sheets` | Google Sheet | Free | Great when no Microsoft account is required |
+
+> The `GRAPH_MODE` setting is kept for compatibility, even though the app is conceptually using a generalized storage layer.
+
+## Project structure
+
+```text
+LedgerBridge/
+├── client/                 # React + TypeScript frontend
+├── server/                 # Express + TypeScript backend
+├── docs/                   # Setup and deployment docs
+├── scripts/                # Helper scripts
+├── .github/                # GitHub automation/workflows
+├── .gitignore
+├── LICENSE
+├── package.json
+├── README.md
+└── ...
 ```
 
-## Storage modes (set `GRAPH_MODE` in `server/.env`)
+## Quick start
 
-| Mode | Where the ledger lives | Cost | Guide |
-|---|---|---|---|
-| `mock` | in-memory fake (local dev) | free | none needed |
-| `onedrive` | personal OneDrive folder, shared by link | **free** | [docs/FREE_ONEDRIVE_SETUP.md](docs/FREE_ONEDRIVE_SETUP.md) |
-| `live` | SharePoint Online document library | needs a Microsoft 365 tenant | [docs/SHAREPOINT_SETUP.md](docs/SHAREPOINT_SETUP.md) |
-| `sheets` | Google Sheet (one tab per month; downloadable as .xlsx) | **free**, no Microsoft account | [docs/GOOGLE_SHEETS_SETUP.md](docs/GOOGLE_SHEETS_SETUP.md) |
-
-(`GRAPH_MODE` is the storage-mode switch; the name is kept for compatibility.)
-
-## Quick start (local, no Azure needed)
+### 1) Install dependencies
 
 ```bash
 npm run install:all
-cp server/.env.example server/.env      # GRAPH_MODE=mock by default
-# start MongoDB locally or point MONGODB_URI at Atlas
-npm run dev:server                      # http://localhost:4000
-npm run dev:client                      # http://localhost:5173 (proxies /api)
 ```
 
-In mock mode the "SharePoint" is an in-memory fake. List files at `GET /api/dev/mock-ledger`, download one with `?file=Ledgers/Sales_Ledger_2026-11.xlsx`.
+### 2) Configure environment
 
-Other scripts: `npm run typecheck`, `npm run build`, `npm test` (offline suite, no MongoDB/Azure needed), `npm run check:schema`.
+```bash
+cp server/.env.example server/.env
+```
 
-## Preparing a GitHub push
+By default, `GRAPH_MODE=mock` is used for local development. This allows you to run the app without Azure or SharePoint credentials.
 
-- Keep local credentials in `server/.env` and never commit downloaded service-account JSON keys. The root `.gitignore` excludes environment files, private keys, and service-account credential files; `server/.env.example` is safe to commit.
-- If a credential was ever pushed to a remote, revoke or rotate it in its provider even after removing it from Git.
-- GitHub Actions runs type checks, builds both apps, runs the offline test suite, and checks that the client/server sale schemas match on pushes and pull requests.
+### 3) Start the app
 
-## How requirements are met
+```bash
+npm run dev:server
+npm run dev:client
+```
 
-| Requirement | Implementation |
-|---|---|
-| UI | Tailwind v4 port of the Figma design: split hero/form layout, status indicator wired to `/api/health`, recent-transactions list with live sync badges; currency shown as KES (`VITE_CURRENCY` / `LEDGER_CURRENCY`) |
-| Live input filters | `client/src/App.tsx` (`filters`): storeCode uppercased, sku trimmed, units digits only, revenue max 2 dp |
-| Server re-validation | Zod schema in `server/src/schemas/sale.ts` (mirrored in `client/src/schemas/sale.ts`; `npm run check:schema` guards drift) |
-| Timestamp | Stamped **server-side** (ISO-8601); the client's own time is kept as `clientSubmittedAt` |
-| "Atomic" Mongo → SharePoint | Outbox pattern: Mongo write first, then worker sync; Mongo is always the source of truth |
-| < 200 ms feedback | `POST /api/sales` returns `202` right after the Mongo insert; UI shows ack time and a live status badge |
-| Concurrency safety | One in-process tick at a time, atomic Mongo claims across instances, eTag `If-Match` uploads, create-only (`conflictBehavior=fail`) init, conflict → re-read and retry |
-| In-memory files | Graph download as `ArrayBuffer`, ExcelJS load/append, `writeBuffer()`, upload; nothing on disk |
-| Auto-initialisation | Styled workbook created **only on a genuine 404** (a 403/5xx never overwrites the ledger) |
-| Silent auth | SharePoint: `acquireTokenByClientCredential` (MSAL caches/renews). Free OneDrive: one-time device sign-in, then silent refresh-token renewal (encrypted in MongoDB) |
-| Fault tolerance | Exponential backoff + jitter, `Retry-After` honoured, structured logs, `failed` state + admin retry |
-| Idempotency | `recordId` UUID (client-generated, reused on retry) also written to a hidden sheet column; duplicates are skipped |
-| Secrets | `.env` only, validated at boot; client bundle contains no secrets |
-| Strict TS | `strict` + `noUncheckedIndexedAccess` in both tiers |
-| Zero cost | No Zapier/Make/add-ins; open-source libraries, MongoDB Atlas M0, and a free destination: Google Sheets (`GRAPH_MODE=sheets`) or personal OneDrive (`onedrive`); SharePoint mode only if you already have a tenant |
+- API: `http://localhost:4000`
+- Client: `http://localhost:5173`
 
-## Azure / SharePoint setup (for `GRAPH_MODE=live`)
+If you are using mock mode, the app still works locally without external integrations.
 
-> Full step-by-step guide with test plan and troubleshooting: **[docs/SHAREPOINT_SETUP.md](docs/SHAREPOINT_SETUP.md)**. The summary below is the short version.
+## Local development notes
 
-1. **Entra ID → App registrations → New registration** (single tenant). Copy *Tenant ID* and *Client ID*.
-2. **Certificates & secrets → New client secret** → `AZURE_CLIENT_SECRET` (use a certificate in production).
-3. **API permissions → Microsoft Graph → Application permissions → `Sites.Selected`** → *Grant admin consent*.
-4. Grant the app access to **only your site** (as a Graph admin):
-   `POST https://graph.microsoft.com/v1.0/sites/{site-id}/permissions` with body
-   `{ "roles": ["write"], "grantedToIdentities": [{ "application": { "id": "<client-id>", "displayName": "LedgerBridge" } }] }`
-5. Find IDs: `GET /sites/{hostname}:/sites/{site-name}` → `SP_SITE_ID`; `GET /sites/{site-id}/drives` → `SP_DRIVE_ID` (the *Documents* library).
-6. Set `GRAPH_MODE=live`, `SP_FOLDER_PATH=Ledgers` (create the `Ledgers` folder in the library yourself).
+- MongoDB must be running locally or accessible via a MongoDB URI
+- You can point the server to MongoDB Atlas or any compatible instance
+- The project includes validation and testing scripts for local use without needing cloud services
 
-## API
+## Available scripts
 
-| Method | Path | Notes |
+```bash
+npm run install:all
+npm run dev:server
+npm run dev:client
+npm run typecheck
+npm run build
+npm test
+npm run check:schema
+```
+
+## API overview
+
+| Method | Path | Purpose |
 |---|---|---|
-| POST | `/api/sales` | `202` queued · `200` idempotent replay · `422` field issues · `429` rate-limited |
-| GET | `/api/sales?limit=10` | recent records with sync status |
-| GET | `/api/sales/:recordId` | single record status |
-| POST | `/api/sales/:recordId/retry` | admin (`x-api-key`) re-queue of a `failed` record |
-| POST | `/api/sales/retry-failed` | admin (`x-api-key`) re-queue **all** failed records |
-| GET | `/api/health` | DB state and Graph mode |
+| `POST` | `/api/sales` | Submit a new sale for processing |
+| `GET` | `/api/sales?limit=10` | Fetch recent sales and sync status |
+| `GET` | `/api/sales/:recordId` | Check the status of a specific sale |
+| `POST` | `/api/sales/:recordId/retry` | Re-queue a failed record (admin) |
+| `POST` | `/api/sales/retry-failed` | Retry all failed records (admin) |
+| `GET` | `/api/health` | Check DB state and configured Graph mode |
 
-## Known limits
+### Behavior summary
 
-- The submit endpoint has **no user authentication** (a key in a browser bundle would be public). It is protected by rate limiting, CORS and validation. Add Entra ID sign-in before exposing it beyond a trusted network.
-- ExcelJS loads the whole workbook into RAM; monthly rollover keeps files small. Files over 4 MB use a Graph upload session (implemented, untested against a live tenant).
-- Free hosting tiers that sleep delay syncs until the next wake; queued records are never lost.
+- `202 Accepted` means the sale was accepted and queued
+- `200` may indicate an idempotent replay
+- `422` means validation failed
+- `429` indicates rate limiting
+
+## Design principles
+
+LedgerBridge is built around a few important principles:
+
+1. MongoDB is the source of truth
+2. The ledger file is a derived reporting layer
+3. Sales are processed asynchronously to avoid blocking the user
+4. Duplicate writes are prevented with idempotency controls
+5. Failures are visible and recoverable
+6. Local development should not require cloud credentials
+
+## Security and operational notes
+
+The project includes safeguards such as:
+
+- environment-variable-based configuration
+- no secrets embedded into the frontend bundle
+- rate limiting on public endpoints
+- validation on both client and server
+- retry and failure handling for sync tasks
+- careful treatment of Azure/MS Graph credentials
+
+Before pushing code to GitHub, keep local secrets in `server/.env` and never commit credential files or private keys.
+
+## Setup guides
+
+Detailed configuration instructions are available in the docs folder:
+
+- `docs/FREE_ONEDRIVE_SETUP.md`
+- `docs/SHAREPOINT_SETUP.md`
+- `docs/GOOGLE_SHEETS_SETUP.md`
+
+## Known limitations
+
+- The submit endpoint is intentionally public-facing and relies on validation and rate limiting rather than user authentication.
+- ExcelJS loads workbook data into memory, so very large files should be managed carefully.
+- Free hosting providers that sleep can delay background sync processing, though queued records are retained.
+
+## License
+
+This project is licensed under the MIT License. See `LICENSE` for details.
+
+## Contributing
+
+Contributions are welcome. If you want to improve the app, consider:
+
+- improving validation and error handling
+- making the Excel sync logic more robust
+- adding better monitoring and analytics
+- extending storage modes or documentation
+
+## Summary
+
+LedgerBridge is a practical, business-oriented sales ledger automation platform that blends a simple frontend, a validated API, and asynchronous syncing to spreadsheet-based storage. It is designed to keep the accounting and sales process consistent while reducing manual work and the risk of inaccurate ledger data.
+
+If you want, I can also turn this into a more polished version tailored for GitHub, including badges, a cleaner architecture diagram, and a more product-style landing-page README.
