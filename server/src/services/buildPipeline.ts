@@ -7,6 +7,8 @@ import type { DriveClient } from './graph/types';
 import { GoogleSheetsLedger, GoogleTokenProvider, SheetsRestApi, parseServiceAccountJson } from './googleSheetsLedger';
 import { LedgerService, type LedgerSink } from './ledgerWorkbook';
 import { MongoOutboxStore } from './outboxStore';
+import { GoogleSheetsOrderLedger } from './orderLedger';
+import { MongoOrderLedgerStore, OrderLedgerWorker } from './orderLedgerWorker';
 import { SyncWorker } from './syncWorker';
 
 /** Delegated token provider for a free personal OneDrive (also used by the sign-in script). */
@@ -41,7 +43,21 @@ function buildSink(env: Env): { sink: LedgerSink; mockDrive?: MockDriveClient } 
   return { sink: new LedgerService(drive, 4, env.LEDGER_CURRENCY), ...(mockDrive ? { mockDrive } : {}) };
 }
 
-export function buildPipeline(env: Env): { mockDrive?: MockDriveClient; worker: SyncWorker } {
+/** Approved-orders ledger worker. Only runs with a Google Sheet (GRAPH_MODE=sheets); otherwise orders just queue up. */
+function buildOrderLedgerWorker(env: Env): OrderLedgerWorker | undefined {
+  if (env.GRAPH_MODE !== 'sheets') return undefined;
+  const sa = parseServiceAccountJson(env.GOOGLE_SERVICE_ACCOUNT_JSON_BASE64!);
+  const api = new SheetsRestApi(env.GOOGLE_SHEET_ID!, new GoogleTokenProvider(sa));
+  return new OrderLedgerWorker(new MongoOrderLedgerStore(), new GoogleSheetsOrderLedger(api), {
+    pollMs: env.SYNC_POLL_MS,
+    maxAttempts: env.SYNC_MAX_ATTEMPTS,
+    backoffBaseMs: env.SYNC_BACKOFF_BASE_MS,
+    lockTimeoutMs: env.SYNC_LOCK_TIMEOUT_MS,
+    tabPrefix: env.ORDER_LEDGER_PREFIX,
+  });
+}
+
+export function buildPipeline(env: Env): { mockDrive?: MockDriveClient; worker: SyncWorker; orderLedger?: OrderLedgerWorker } {
   const { sink, mockDrive } = buildSink(env);
   const worker = new SyncWorker(new MongoOutboxStore(), sink, {
     pollMs: env.SYNC_POLL_MS,
@@ -53,5 +69,6 @@ export function buildPipeline(env: Env): { mockDrive?: MockDriveClient; worker: 
     filePrefix: env.LEDGER_FILE_PREFIX,
     rollover: env.LEDGER_ROLLOVER,
   });
-  return { ...(mockDrive ? { mockDrive } : {}), worker };
+  const orderLedger = buildOrderLedgerWorker(env);
+  return { ...(mockDrive ? { mockDrive } : {}), worker, ...(orderLedger ? { orderLedger } : {}) };
 }

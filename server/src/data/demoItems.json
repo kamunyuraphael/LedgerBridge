@@ -1,0 +1,927 @@
+[
+{
+"itemNo": "JT20001",
+"description": "Coca-Cola Original 300Ml Pet",
+"supplierCode": "V0004"
+},
+{
+"itemNo": "JT20002",
+"description": "Coca-Cola Original 500Ml Pet",
+"supplierCode": "V0004"
+},
+{
+"itemNo": "JT20003",
+"description": "Coca-Cola Original 1Ltr Pet",
+"supplierCode": "V0004"
+},
+{
+"itemNo": "JT20004",
+"description": "Coca-Cola Original 2Ltr Pet",
+"supplierCode": "V0004"
+},
+{
+"itemNo": "JT20005",
+"description": "Fanta Orange 300Ml Pet",
+"supplierCode": "V0004"
+},
+{
+"itemNo": "JT20006",
+"description": "Fanta Orange 500Ml Pet",
+"supplierCode": "V0004"
+},
+{
+"itemNo": "JT20007",
+"description": "Fanta Orange 2Ltr Pet",
+"supplierCode": "V0004"
+},
+{
+"itemNo": "JT20008",
+"description": "Fanta Passion 500Ml Pet",
+"supplierCode": "V0004"
+},
+{
+"itemNo": "JT20009",
+"description": "Sprite 300Ml Pet",
+"supplierCode": "V0004"
+},
+{
+"itemNo": "JT20010",
+"description": "Sprite 500Ml Pet",
+"supplierCode": "V0004"
+},
+{
+"itemNo": "JT20011",
+"description": "Sprite 2Ltr Pet",
+"supplierCode": "V0004"
+},
+{
+"itemNo": "JT20012",
+"description": "Stoney Tangawizi 500Ml Pet",
+"supplierCode": "V0004"
+},
+{
+"itemNo": "JT20013",
+"description": "Krest Bitter Lemon 300Ml Pet",
+"supplierCode": "V0004"
+},
+{
+"itemNo": "JT20014",
+"description": "Minute Maid Mango 1Ltr",
+"supplierCode": "V0004"
+},
+{
+"itemNo": "JT20015",
+"description": "Minute Maid Apple 1Ltr",
+"supplierCode": "V0004"
+},
+{
+"itemNo": "JT20016",
+"description": "Dasani Water 500Ml",
+"supplierCode": "V0004"
+},
+{
+"itemNo": "JT20017",
+"description": "Dasani Water 1.5Ltr",
+"supplierCode": "V0004"
+},
+{
+"itemNo": "JT20018",
+"description": "Kimbo Cooking Fat 250Gm",
+"supplierCode": "V0005"
+},
+{
+"itemNo": "JT20019",
+"description": "Kimbo Cooking Fat 500Gm",
+"supplierCode": "V0005"
+},
+{
+"itemNo": "JT20020",
+"description": "Kimbo Cooking Fat 1Kg",
+"supplierCode": "V0005"
+},
+{
+"itemNo": "JT20021",
+"description": "Kimbo Cooking Fat 2Kg",
+"supplierCode": "V0005"
+},
+{
+"itemNo": "JT20022",
+"description": "Cowboy Cooking Fat 500Gm",
+"supplierCode": "V0005"
+},
+{
+"itemNo": "JT20023",
+"description": "Cowboy Cooking Fat 1Kg",
+"supplierCode": "V0005"
+},
+{
+"itemNo": "JT20024",
+"description": "Kapa Cooking Oil 1Ltr",
+"supplierCode": "V0005"
+},
+{
+"itemNo": "JT20025",
+"description": "Kapa Cooking Oil 3Ltr",
+"supplierCode": "V0005"
+},
+{
+"itemNo": "JT20026",
+"description": "Elianto Corn Oil 500Ml",
+"supplierCode": "V0028"
+},
+{
+"itemNo": "JT20027",
+"description": "Elianto Corn Oil 1Ltr",
+"supplierCode": "V0028"
+},
+{
+"itemNo": "JT20028",
+"description": "Elianto Corn Oil 3Ltr",
+"supplierCode": "V0028"
+},
+{
+"itemNo": "JT20029",
+"description": "Golden Fry Veg Oil 1Ltr",
+"supplierCode": "V0028"
+},
+{
+"itemNo": "JT20030",
+"description": "Golden Fry Veg Oil 3Ltr",
+"supplierCode": "V0028"
+},
+{
+"itemNo": "JT20031",
+"description": "Golden Fry Veg Oil 5Ltr",
+"supplierCode": "V0028"
+},
+{
+"itemNo": "JT20032",
+"description": "Soko Maize Meal 1Kg",
+"supplierCode": "V0028"
+},
+{
+"itemNo": "JT20033",
+"description": "Soko Maize Meal 2Kg",
+"supplierCode": "V0028"
+},
+{
+"itemNo": "JT20034",
+"description": "Fresh Fri Veg Oil 1Ltr",
+"supplierCode": "V0022"
+},
+{
+"itemNo": "JT20035",
+"description": "Fresh Fri Veg Oil 2Ltr",
+"supplierCode": "V0022"
+},
+{
+"itemNo": "JT20036",
+"description": "Fresh Fri Veg Oil 5Ltr",
+"supplierCode": "V0022"
+},
+{
+"itemNo": "JT20037",
+"description": "Diva Bar Soap 800Gm",
+"supplierCode": "V0022"
+},
+{
+"itemNo": "JT20038",
+"description": "Diva Bar Soap 1Kg",
+"supplierCode": "V0022"
+},
+{
+"itemNo": "JT20039",
+"description": "Pwani Salit Oil 1Ltr",
+"supplierCode": "V0022"
+},
+{
+"itemNo": "JT20040",
+"description": "Exe Maize Meal 1Kg",
+"supplierCode": "V0036"
+},
+{
+"itemNo": "JT20041",
+"description": "Exe Maize Meal 2Kg",
+"supplierCode": "V0036"
+},
+{
+"itemNo": "JT20042",
+"description": "Jogoo Maize Meal 2Kg",
+"supplierCode": "V0036"
+},
+{
+"itemNo": "JT20043",
+"description": "Dola Wheat Flour 1Kg",
+"supplierCode": "V0036"
+},
+{
+"itemNo": "JT20044",
+"description": "Dola Wheat Flour 2Kg",
+"supplierCode": "V0036"
+},
+{
+"itemNo": "JT20045",
+"description": "Hostess Wheat Flour 2Kg",
+"supplierCode": "V0036"
+},
+{
+"itemNo": "JT20046",
+"description": "Unga Atta Mark 1 2Kg",
+"supplierCode": "V0036"
+},
+{
+"itemNo": "JT20047",
+"description": "Pembe Maize Meal 1Kg",
+"supplierCode": "V0025"
+},
+{
+"itemNo": "JT20048",
+"description": "Pembe Maize Meal 2Kg",
+"supplierCode": "V0025"
+},
+{
+"itemNo": "JT20049",
+"description": "Pembe Wheat Flour 1Kg",
+"supplierCode": "V0025"
+},
+{
+"itemNo": "JT20050",
+"description": "Pembe Wheat Flour 2Kg",
+"supplierCode": "V0025"
+},
+{
+"itemNo": "JT20051",
+"description": "Pembe Atta Mark 1 2Kg",
+"supplierCode": "V0025"
+},
+{
+"itemNo": "JT20052",
+"description": "Joy Wheat Flour 2Kg",
+"supplierCode": "V0015"
+},
+{
+"itemNo": "JT20053",
+"description": "Joy Maize Meal 2Kg",
+"supplierCode": "V0015"
+},
+{
+"itemNo": "JT20054",
+"description": "Joy Atta Mark 1 2Kg",
+"supplierCode": "V0015"
+},
+{
+"itemNo": "JT20055",
+"description": "Kabras Sugar 1Kg",
+"supplierCode": "V0018"
+},
+{
+"itemNo": "JT20056",
+"description": "Kabras Sugar 2Kg",
+"supplierCode": "V0018"
+},
+{
+"itemNo": "JT20057",
+"description": "Kabras Sugar 5Kg",
+"supplierCode": "V0018"
+},
+{
+"itemNo": "JT20058",
+"description": "Mumias Sugar 1Kg",
+"supplierCode": "V0037"
+},
+{
+"itemNo": "JT20059",
+"description": "Mumias Sugar 2Kg",
+"supplierCode": "V0037"
+},
+{
+"itemNo": "JT20060",
+"description": "Sukari Sugar 1Kg",
+"supplierCode": "V0550"
+},
+{
+"itemNo": "JT20061",
+"description": "Sukari Sugar 2Kg",
+"supplierCode": "V0550"
+},
+{
+"itemNo": "JT20062",
+"description": "Ketepa Pride Tea Bags 100S",
+"supplierCode": "V0077"
+},
+{
+"itemNo": "JT20063",
+"description": "Ketepa Pride Tea Leaf 250Gm",
+"supplierCode": "V0077"
+},
+{
+"itemNo": "JT20064",
+"description": "Ketepa Pride Tea Leaf 500Gm",
+"supplierCode": "V0077"
+},
+{
+"itemNo": "JT20065",
+"description": "Ketepa Savannah Tea Bags 50S",
+"supplierCode": "V0077"
+},
+{
+"itemNo": "JT20066",
+"description": "Ketepa Premium Tea 100Gm",
+"supplierCode": "V0077"
+},
+{
+"itemNo": "JT20067",
+"description": "Farmers Choice Pork Sausages 500Gm",
+"supplierCode": "V0007"
+},
+{
+"itemNo": "JT20068",
+"description": "Farmers Choice Pork Sausages 1Kg",
+"supplierCode": "V0007"
+},
+{
+"itemNo": "JT20069",
+"description": "Farmers Choice Beef Sausages 500Gm",
+"supplierCode": "V0007"
+},
+{
+"itemNo": "JT20070",
+"description": "Farmers Choice Chicken Franks 250Gm",
+"supplierCode": "V0007"
+},
+{
+"itemNo": "JT20071",
+"description": "Farmers Choice Smokies 500Gm",
+"supplierCode": "V0007"
+},
+{
+"itemNo": "JT20072",
+"description": "Farmers Choice Breakfast Bacon 200Gm",
+"supplierCode": "V0007"
+},
+{
+"itemNo": "JT20073",
+"description": "Farmers Choice Cheese Sausages 400Gm",
+"supplierCode": "V0007"
+},
+{
+"itemNo": "JT20074",
+"description": "Royco Mchuzi Mix 200Gm",
+"supplierCode": "V0009"
+},
+{
+"itemNo": "JT20075",
+"description": "Royco Beef Cubes 40Gm",
+"supplierCode": "V0009"
+},
+{
+"itemNo": "JT20076",
+"description": "Blue Band Original 250Gm",
+"supplierCode": "V0009"
+},
+{
+"itemNo": "JT20077",
+"description": "Blue Band Original 500Gm",
+"supplierCode": "V0009"
+},
+{
+"itemNo": "JT20078",
+"description": "Omo Multi Active 500Gm",
+"supplierCode": "V0009"
+},
+{
+"itemNo": "JT20079",
+"description": "Omo Multi Active 1Kg",
+"supplierCode": "V0009"
+},
+{
+"itemNo": "JT20080",
+"description": "Sunlight Bar Soap 800Gm",
+"supplierCode": "V0009"
+},
+{
+"itemNo": "JT20081",
+"description": "Lux Soap 175Gm",
+"supplierCode": "V0009"
+},
+{
+"itemNo": "JT20082",
+"description": "Vaseline Petroleum Jelly 250Ml",
+"supplierCode": "V0009"
+},
+{
+"itemNo": "JT20083",
+"description": "Closeup Toothpaste 100Ml",
+"supplierCode": "V0009"
+},
+{
+"itemNo": "JT20084",
+"description": "Geisha Soap 225Gm",
+"supplierCode": "V0009"
+},
+{
+"itemNo": "JT20085",
+"description": "Carex Handwash 250Ml",
+"supplierCode": "V0042"
+},
+{
+"itemNo": "JT20086",
+"description": "Imperial Leather Soap 150Gm",
+"supplierCode": "V0042"
+},
+{
+"itemNo": "JT20087",
+"description": "Cussons Baby Powder 200Gm",
+"supplierCode": "V0042"
+},
+{
+"itemNo": "JT20088",
+"description": "Cussons Baby Lotion 200Ml",
+"supplierCode": "V0042"
+},
+{
+"itemNo": "JT20089",
+"description": "Velvex Toilet Tissue 4 Roll",
+"supplierCode": "V0051"
+},
+{
+"itemNo": "JT20090",
+"description": "Velvex Toilet Tissue 10 Roll",
+"supplierCode": "V0051"
+},
+{
+"itemNo": "JT20091",
+"description": "Velvex Kitchen Towel 2 Roll",
+"supplierCode": "V0051"
+},
+{
+"itemNo": "JT20092",
+"description": "Tender Care Baby Wipes 80S",
+"supplierCode": "V0051"
+},
+{
+"itemNo": "JT20093",
+"description": "Softcare Baby Diapers Size 2 Jumbo",
+"supplierCode": "V0026"
+},
+{
+"itemNo": "JT20094",
+"description": "Softcare Baby Diapers Size 3 Jumbo",
+"supplierCode": "V0026"
+},
+{
+"itemNo": "JT20095",
+"description": "Softcare Baby Diapers Size 4 Jumbo",
+"supplierCode": "V0026"
+},
+{
+"itemNo": "JT20096",
+"description": "Softcare Sanitary Pads Regular 8S",
+"supplierCode": "V0026"
+},
+{
+"itemNo": "JT20097",
+"description": "Molfix Baby Diapers Size 3 Jumbo",
+"supplierCode": "V0106"
+},
+{
+"itemNo": "JT20098",
+"description": "Molfix Baby Diapers Size 4 Jumbo",
+"supplierCode": "V0106"
+},
+{
+"itemNo": "JT20099",
+"description": "Molfix Baby Diapers Size 5 Jumbo",
+"supplierCode": "V0106"
+},
+{
+"itemNo": "JT20100",
+"description": "Papia Toilet Tissue 10 Roll",
+"supplierCode": "V0106"
+},
+{
+"itemNo": "JT20101",
+"description": "Tiger Bar Soap 800Gm",
+"supplierCode": "V0061"
+},
+{
+"itemNo": "JT20102",
+"description": "Tiger Bar Soap 1Kg",
+"supplierCode": "V0061"
+},
+{
+"itemNo": "JT20103",
+"description": "Tiger Washing Powder 1Kg",
+"supplierCode": "V0061"
+},
+{
+"itemNo": "JT20104",
+"description": "Tiger Washing Powder 500Gm",
+"supplierCode": "V0061"
+},
+{
+"itemNo": "JT20105",
+"description": "Menengai Bar Soap 800Gm",
+"supplierCode": "V0021"
+},
+{
+"itemNo": "JT20106",
+"description": "Menengai Bar Soap 1Kg",
+"supplierCode": "V0021"
+},
+{
+"itemNo": "JT20107",
+"description": "Ndume Bar Soap 800Gm",
+"supplierCode": "V0021"
+},
+{
+"itemNo": "JT20108",
+"description": "Menengai Cream Detergent 500Gm",
+"supplierCode": "V0021"
+},
+{
+"itemNo": "JT20109",
+"description": "Kenchic Whole Chicken 1.2Kg",
+"supplierCode": "V0549"
+},
+{
+"itemNo": "JT20110",
+"description": "Kenchic Chicken Breast 500Gm",
+"supplierCode": "V0549"
+},
+{
+"itemNo": "JT20111",
+"description": "Kenchic Chicken Drumsticks 1Kg",
+"supplierCode": "V0549"
+},
+{
+"itemNo": "JT20112",
+"description": "Kenchic Chicken Wings 1Kg",
+"supplierCode": "V0549"
+},
+{
+"itemNo": "JT20113",
+"description": "Kenchic Chicken Sausages 500Gm",
+"supplierCode": "V0549"
+},
+{
+"itemNo": "JT20114",
+"description": "Kenchic Eggs Tray 30S",
+"supplierCode": "V0549"
+},
+{
+"itemNo": "JT20115",
+"description": "Hen Haven Eggs Tray 30S",
+"supplierCode": "V0093"
+},
+{
+"itemNo": "JT20116",
+"description": "Hen Haven Eggs Tray 12S",
+"supplierCode": "V0093"
+},
+{
+"itemNo": "JT20117",
+"description": "Green Farm Eggs Tray 30S",
+"supplierCode": "V0029"
+},
+{
+"itemNo": "JT20118",
+"description": "Green Farm Whole Chicken 1.5Kg",
+"supplierCode": "V0029"
+},
+{
+"itemNo": "JT20119",
+"description": "Happy Cow Fresh Milk 500Ml",
+"supplierCode": "V0091"
+},
+{
+"itemNo": "JT20120",
+"description": "Happy Cow Fresh Milk 1Ltr",
+"supplierCode": "V0091"
+},
+{
+"itemNo": "JT20121",
+"description": "Happy Cow Strawberry Yoghurt 500Ml",
+"supplierCode": "V0091"
+},
+{
+"itemNo": "JT20122",
+"description": "Happy Cow Vanilla Yoghurt 500Ml",
+"supplierCode": "V0091"
+},
+{
+"itemNo": "JT20123",
+"description": "Happy Cow Ghee 500Gm",
+"supplierCode": "V0091"
+},
+{
+"itemNo": "JT20124",
+"description": "Kinangop Fresh Milk 500Ml",
+"supplierCode": "V0547"
+},
+{
+"itemNo": "JT20125",
+"description": "Kinangop Fresh Milk 1Ltr",
+"supplierCode": "V0547"
+},
+{
+"itemNo": "JT20126",
+"description": "Kinangop Natural Yoghurt 500Ml",
+"supplierCode": "V0547"
+},
+{
+"itemNo": "JT20127",
+"description": "Kinangop Butter 250Gm",
+"supplierCode": "V0547"
+},
+{
+"itemNo": "JT20128",
+"description": "Cowbell Full Cream Milk Powder 25Gm",
+"supplierCode": "V0113"
+},
+{
+"itemNo": "JT20129",
+"description": "Cowbell Full Cream Milk Powder 400Gm",
+"supplierCode": "V0113"
+},
+{
+"itemNo": "JT20130",
+"description": "Cowbell Full Cream Milk Powder 900Gm",
+"supplierCode": "V0113"
+},
+{
+"itemNo": "JT20131",
+"description": "Cowbell Chocolate Drink 300Gm",
+"supplierCode": "V0113"
+},
+{
+"itemNo": "JT20132",
+"description": "Glacier Vanilla Ice Cream 1Ltr",
+"supplierCode": "V0030"
+},
+{
+"itemNo": "JT20133",
+"description": "Glacier Vanilla Ice Cream 2Ltr",
+"supplierCode": "V0030"
+},
+{
+"itemNo": "JT20134",
+"description": "Glacier Chocolate Ice Cream 2Ltr",
+"supplierCode": "V0030"
+},
+{
+"itemNo": "JT20135",
+"description": "Glacier Strawberry Ice Cream 2Ltr",
+"supplierCode": "V0030"
+},
+{
+"itemNo": "JT20136",
+"description": "Tropical Heat Curry Powder 100Gm",
+"supplierCode": "V0031"
+},
+{
+"itemNo": "JT20137",
+"description": "Tropical Heat Garam Masala 50Gm",
+"supplierCode": "V0031"
+},
+{
+"itemNo": "JT20138",
+"description": "Tropical Heat Chilli Powder 100Gm",
+"supplierCode": "V0031"
+},
+{
+"itemNo": "JT20139",
+"description": "Tropical Heat Cinnamon Powder 100Gm",
+"supplierCode": "V0031"
+},
+{
+"itemNo": "JT20140",
+"description": "Spice World Black Pepper 50Gm",
+"supplierCode": "V0076"
+},
+{
+"itemNo": "JT20141",
+"description": "Spice World Turmeric Powder 100Gm",
+"supplierCode": "V0076"
+},
+{
+"itemNo": "JT20142",
+"description": "Spice World Pilau Masala 100Gm",
+"supplierCode": "V0076"
+},
+{
+"itemNo": "JT20143",
+"description": "Spice World Cumin Powder 50Gm",
+"supplierCode": "V0076"
+},
+{
+"itemNo": "JT20144",
+"description": "Premier Spaghetti 500Gm",
+"supplierCode": "V0064"
+},
+{
+"itemNo": "JT20145",
+"description": "Premier Macaroni 500Gm",
+"supplierCode": "V0064"
+},
+{
+"itemNo": "JT20146",
+"description": "Premier Instant Noodles Chicken 70Gm",
+"supplierCode": "V0064"
+},
+{
+"itemNo": "JT20147",
+"description": "Premier Instant Noodles Beef 70Gm",
+"supplierCode": "V0064"
+},
+{
+"itemNo": "JT20148",
+"description": "Kevian Mango Juice 1Ltr",
+"supplierCode": "V0039"
+},
+{
+"itemNo": "JT20149",
+"description": "Kevian Orange Juice 1Ltr",
+"supplierCode": "V0039"
+},
+{
+"itemNo": "JT20150",
+"description": "Kevian Apple Juice 1Ltr",
+"supplierCode": "V0039"
+},
+{
+"itemNo": "JT20151",
+"description": "Kevian Passion Juice 500Ml",
+"supplierCode": "V0039"
+},
+{
+"itemNo": "JT20152",
+"description": "Kevian Mango Juice 250Ml",
+"supplierCode": "V0039"
+},
+{
+"itemNo": "JT20153",
+"description": "Njoro Tomato Paste 70Gm",
+"supplierCode": "V0060"
+},
+{
+"itemNo": "JT20154",
+"description": "Njoro Tomato Paste 200Gm",
+"supplierCode": "V0060"
+},
+{
+"itemNo": "JT20155",
+"description": "Njoro Tomato Paste 400Gm",
+"supplierCode": "V0060"
+},
+{
+"itemNo": "JT20156",
+"description": "Njoro Baked Beans 420Gm",
+"supplierCode": "V0060"
+},
+{
+"itemNo": "JT20157",
+"description": "Kenafric Cashew Biscuits 150Gm",
+"supplierCode": "V0117"
+},
+{
+"itemNo": "JT20158",
+"description": "Kenafric Cream Biscuits 100Gm",
+"supplierCode": "V0117"
+},
+{
+"itemNo": "JT20159",
+"description": "Kenafric Choco Bar 45Gm",
+"supplierCode": "V0117"
+},
+{
+"itemNo": "JT20160",
+"description": "Manji Glucose Biscuits 200Gm",
+"supplierCode": "V0053"
+},
+{
+"itemNo": "JT20161",
+"description": "Manji Digestive Biscuits 250Gm",
+"supplierCode": "V0053"
+},
+{
+"itemNo": "JT20162",
+"description": "Manji Cream Sandwich 100Gm",
+"supplierCode": "V0053"
+},
+{
+"itemNo": "JT20163",
+"description": "Raid Flying Insect Killer 300Ml",
+"supplierCode": "V0063"
+},
+{
+"itemNo": "JT20164",
+"description": "Raid Flying Insect Killer 400Ml",
+"supplierCode": "V0063"
+},
+{
+"itemNo": "JT20165",
+"description": "Glade Air Freshener 300Ml",
+"supplierCode": "V0063"
+},
+{
+"itemNo": "JT20166",
+"description": "Mr Muscle Glass Cleaner 500Ml",
+"supplierCode": "V0063"
+},
+{
+"itemNo": "JT20167",
+"description": "Mill Bakers White Bread 400Gm",
+"supplierCode": "V0024"
+},
+{
+"itemNo": "JT20168",
+"description": "Mill Bakers White Bread 800Gm",
+"supplierCode": "V0024"
+},
+{
+"itemNo": "JT20169",
+"description": "Mill Bakers Brown Bread 400Gm",
+"supplierCode": "V0024"
+},
+{
+"itemNo": "JT20170",
+"description": "Joy White Bread 400Gm",
+"supplierCode": "V0033"
+},
+{
+"itemNo": "JT20171",
+"description": "Joy White Bread 800Gm",
+"supplierCode": "V0033"
+},
+{
+"itemNo": "JT20172",
+"description": "Joy Brown Bread 400Gm",
+"supplierCode": "V0033"
+},
+{
+"itemNo": "JT20173",
+"description": "Joy White Buns 6S",
+"supplierCode": "V0033"
+},
+{
+"itemNo": "JT20174",
+"description": "Dormans Instant Coffee 100Gm",
+"supplierCode": "V0114"
+},
+{
+"itemNo": "JT20175",
+"description": "Dormans Ground Coffee 250Gm",
+"supplierCode": "V0114"
+},
+{
+"itemNo": "JT20176",
+"description": "Dormans Coffee Beans 250Gm",
+"supplierCode": "V0114"
+},
+{
+"itemNo": "JT20177",
+"description": "Aquamist Drinking Water 500Ml",
+"supplierCode": "V0065"
+},
+{
+"itemNo": "JT20178",
+"description": "Aquamist Drinking Water 1Ltr",
+"supplierCode": "V0065"
+},
+{
+"itemNo": "JT20179",
+"description": "Aquamist Drinking Water 1.5Ltr",
+"supplierCode": "V0065"
+},
+{
+"itemNo": "JT20180",
+"description": "Aquamist Drinking Water 5Ltr",
+"supplierCode": "V0065"
+},
+{
+"itemNo": "JT20181",
+"description": "Trufoods Peanut Butter 400Gm",
+"supplierCode": "V0059"
+},
+{
+"itemNo": "JT20182",
+"description": "Trufoods Fruit Jam 450Gm",
+"supplierCode": "V0059"
+},
+{
+"itemNo": "JT20183",
+"description": "Trufoods Tomato Sauce 500Gm",
+"supplierCode": "V0059"
+},
+{
+"itemNo": "JT20184",
+"description": "Kikkoman Soy Sauce 150Ml",
+"supplierCode": "V0102"
+},
+{
+"itemNo": "JT20185",
+"description": "Kikkoman Soy Sauce 250Ml",
+"supplierCode": "V0102"
+}
+]

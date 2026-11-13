@@ -1,0 +1,347 @@
+[
+{
+"itemNo": "JT00006",
+"description": "Brookside Natural Lala 1Ltr",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT00008",
+"description": "Brookside Sweet Lala 1Ltr Btl",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT00009",
+"description": "Brookside Sweet Lala Bottle 500Ml",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT00010",
+"description": "Ilara Fresh Milk 500Ml-Pouch",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT00011",
+"description": "Brookside Dairybest Milk 500Ml",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT00012",
+"description": "Brookside Fresh Milk 200Ml Tca",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT00017",
+"description": "Brookside Ghee 1Kg",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT00018",
+"description": "Brookside Ghee 500Gm",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT00019",
+"description": "Ilara Vanilla Yoghurt 250Ml Cup",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT00021",
+"description": "Tuzo S/Berry Yoghurt 200G",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT00022",
+"description": "Tuzo Vanilla Yoghurt 200G",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT00023",
+"description": "Tuzo Vanilla Yoghurt 400G",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT00028",
+"description": "Brookside Probiotic S/Berry 450G",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT00030",
+"description": "Brookside Probiotic Van Yogh 450G",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT00031",
+"description": "Ilara Strawberry Yoghurt 250Ml Cup",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT00034",
+"description": "Ilara Mango Yoghurt Cup 500Ml",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT00035",
+"description": "Ilara Forest Berry Yoghurt Cup 500Ml",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT00037",
+"description": "Ilara F/Berry Yoghurt Cup 250Ml",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT00038",
+"description": "Tuzo Yoghurt Strawberry 400Ml",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT00040",
+"description": "Tuzo Natural Lala Pouch 500Ml",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT00044",
+"description": "Brookside Flavoured Milk Strawberry 250Ml",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT00047",
+"description": "Tuzo Whole Milk 200Ml Tca",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT00049",
+"description": "Tuzo Fresh Whole Milk Pouch 500Ml",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT00050",
+"description": "Brookside Whole Milk Uht 250Ml",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT00052",
+"description": "Tuzo Uht Milk Esl Pouch 200Ml",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT00080",
+"description": "Tuzo Whole Milk Uht 250Ml",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT00092",
+"description": "Tuzo Everfresh Ghee 500Gm",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT00095",
+"description": "Brookside Full Cream Milk Powder 15Gm Sat",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT00104",
+"description": "Delamere Lemon Biscuit Yoghurt 450Ml C",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT00107",
+"description": "Delamere Pineapple Coconut Yoghurt 450Ml C",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT00108",
+"description": "Delamere Pear Caramel Yoghurt 450Ml C",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT00130",
+"description": "Brookside Lactose Free Uht Whole Milk 500Ml",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT00154",
+"description": "Tuzo Whole Milk 1Ltr Fino",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT00160",
+"description": "Molo Fresh Milk 200Ml Tca",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT00658",
+"description": "Festive Milky White Bread 400Gm",
+"supplierCode": "V0008"
+},
+{
+"itemNo": "JT00660",
+"description": "Festive Wholemeal Bread 400Gm",
+"supplierCode": "V0008"
+},
+{
+"itemNo": "JT00662",
+"description": "Festive Family Brown Bread 600Gm",
+"supplierCode": "V0008"
+},
+{
+"itemNo": "JT00663",
+"description": "Festive White Family Bread 600Gm",
+"supplierCode": "V0008"
+},
+{
+"itemNo": "JT00665",
+"description": "Festive Milky White Bread 800Gm",
+"supplierCode": "V0008"
+},
+{
+"itemNo": "JT00666",
+"description": "Festive Wholemeal Bread 800Gm",
+"supplierCode": "V0008"
+},
+{
+"itemNo": "JT00667",
+"description": "Festive Natures Gold White 600Gm",
+"supplierCode": "V0008"
+},
+{
+"itemNo": "JT00670",
+"description": "Festive Festivita White Bread 600Gm",
+"supplierCode": "V0008"
+},
+{
+"itemNo": "JT00676",
+"description": "Festive Natures Gold White 800Gm",
+"supplierCode": "V0008"
+},
+{
+"itemNo": "JT00682",
+"description": "Festive Natures Gold White 400Gm",
+"supplierCode": "V0008"
+},
+{
+"itemNo": "JT00683",
+"description": "Festive White Bread 1.5Kg",
+"supplierCode": "V0008"
+},
+{
+"itemNo": "JT01090",
+"description": "Supa Loaf Family 600Gms",
+"supplierCode": "V0016"
+},
+{
+"itemNo": "JT01092",
+"description": "Supa Loaf Brown Bread 400G Ct",
+"supplierCode": "V0016"
+},
+{
+"itemNo": "JT01093",
+"description": "Supa Loaf White Bread 400Gm Ct",
+"supplierCode": "V0016"
+},
+{
+"itemNo": "JT01094",
+"description": "Supa Butter Toast Bread 600G",
+"supplierCode": "V0016"
+},
+{
+"itemNo": "JT01097",
+"description": "Supa White B/Toast 800Gm",
+"supplierCode": "V0016"
+},
+{
+"itemNo": "JT01098",
+"description": "Supa Butter Toast Loaf 400Gm",
+"supplierCode": "V0016"
+},
+{
+"itemNo": "JT01100",
+"description": "Supa White Sliced Barrel 400Gm",
+"supplierCode": "V0016"
+},
+{
+"itemNo": "JT01102",
+"description": "Supa White Sliced Barrel 600Gm",
+"supplierCode": "V0016"
+},
+{
+"itemNo": "JT01103",
+"description": "Supa White Sliced Barrel 800Gm",
+"supplierCode": "V0016"
+},
+{
+"itemNo": "JT01104",
+"description": "Jaza Home White Bread 400Gm",
+"supplierCode": "V0017"
+},
+{
+"itemNo": "JT01105",
+"description": "Jaza Home White Bread 600Gm",
+"supplierCode": "V0017"
+},
+{
+"itemNo": "JT01106",
+"description": "Jaza Home White Bread 800Gm",
+"supplierCode": "V0017"
+},
+{
+"itemNo": "JT01107",
+"description": "Jaza Home Brown Bread 400Gm",
+"supplierCode": "V0017"
+},
+{
+"itemNo": "JT01108",
+"description": "Jaza Home Brown Bread 600Gm",
+"supplierCode": "V0017"
+},
+{
+"itemNo": "JT01109",
+"description": "Jaza Home Brown Bread 800Gm",
+"supplierCode": "V0017"
+},
+{
+"itemNo": "JT01110",
+"description": "Jaza Home White Bun 400Gm",
+"supplierCode": "V0017"
+},
+{
+"itemNo": "JT01111",
+"description": "Jaza Home Brown Bun 400Gm",
+"supplierCode": "V0017"
+},
+{
+"itemNo": "JT01112",
+"description": "Jaza Home Yellow Scones 400Gm",
+"supplierCode": "V0017"
+},
+{
+"itemNo": "JT01113",
+"description": "Jaza Home Vanilla Queen Cake 200G 4S",
+"supplierCode": "V0017"
+},
+{
+"itemNo": "JT09142",
+"description": "Ilara Strawberry Yoghurt 1Ltr Bottle",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT09149",
+"description": "Ilara Vanilla Yoghurt 1Ltr Bottle",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT09152",
+"description": "Tuzo Strawberry Yoghurt 400G Pouch",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT09153",
+"description": "Tuzo Vanilla Yoghurt 400G Pouch",
+"supplierCode": "V0002"
+},
+{
+"itemNo": "JT11622",
+"description": "Narumoro Longlife Esl Milk 500Ml",
+"supplierCode": "V0001"
+}
+]

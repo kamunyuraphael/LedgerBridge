@@ -12,10 +12,21 @@ import type { FailureUpdate, OutboxItem, OutboxStore } from '../services/outboxS
 import { mapError } from '../services/graph/graphHttpClient';
 import { DelegatedTokenProvider, NOT_SIGNED_IN } from '../services/graph/tokenProviders';
 import { decrypt, encrypt } from '../utils/crypto';
+import { readTable } from '../services/importers';
 import {
-  GoogleSheetsLedger, mapSheetsError, parseServiceAccountJson, tabNameFor, toSerialDate, type SheetsApi,
+  applyLineEdits, canTransition, groupBySupplier, mergeLines, normalizePo, totalsByItem, type CatalogItem,
+} from '../services/orderLogic';
+import { submitOrderSchema } from '../schemas/order';
+import { GoogleSheetsOrderLedger, ORDER_HEADER, orderTabFor, type OrderLedgerRow } from '../services/orderLedger';
+import { OrderLedgerWorker, type LedgerFailure, type LedgerJob, type OrderLedgerStore } from '../services/orderLedgerWorker';
+import {
+  GoogleSheetsLedger, buildAppendCells, mapSheetsError, parseServiceAccountJson, tabNameFor, toSerialDate, type SheetRow, type SheetsApi,
 } from '../services/googleSheetsLedger';
 import { SyncWorker, type SyncWorkerOptions } from '../services/syncWorker';
+
+type OrderLedgerSinkLike = import('../services/orderLedger').OrderLedgerSink;
+type NumFmt = { numberFormat?: { type?: string; pattern?: string } };
+const JWT = 'j'.repeat(48);
 
 // ---------- tiny harness ----------
 const results: { name: string; ok: boolean; err?: unknown }[] = [];
@@ -92,7 +103,7 @@ class MemorySheets implements SheetsApi {
   tabs = new Map<string, { id: number; header: string[]; rows: (string | number)[][]; formatted: boolean }>();
   calls = { createTab: 0, append: 0 };
   private nextId = 1;
-  async listTabs() { return [...this.tabs.keys()]; }
+  async listTabs() { return new Map([...this.tabs].map(([title, t]) => [title, t.id] as [string, number])); }
   async createTab(title: string) {
     this.calls.createTab++;
     if (this.tabs.has(title)) return null;
@@ -101,7 +112,15 @@ class MemorySheets implements SheetsApi {
   async writeHeader(title: string, header: string[]) { this.tabs.get(title)!.header = header; }
   async formatLedgerTab(id: number) { for (const t of this.tabs.values()) if (t.id === id) t.formatted = true; }
   async readRecordIds(title: string) { return (this.tabs.get(title)?.rows ?? []).map((r) => String(r[5])); }
-  async appendRows(title: string, rows: (string | number)[][]) { this.calls.append++; this.tabs.get(title)!.rows.push(...rows); }
+  async readColumn(title: string, col: number) { return (this.tabs.get(title)?.rows ?? []).map((r) => String(r[col] ?? '')); }
+  async updateCells(title: string, updates: { row: number; col: number; value: string | number }[]) {
+    const t = this.tabs.get(title)!;
+    for (const u of updates) t.rows[u.row - 2]![u.col] = u.value;
+  }
+  async appendRows(sheetId: number, rows: SheetRow[]) {
+    this.calls.append++;
+    for (const t of this.tabs.values()) if (t.id === sheetId) t.rows.push(...rows);
+  }
 }
 
 const baseOpts: SyncWorkerOptions = {
@@ -252,9 +271,9 @@ async function main(): Promise<void> {
     });
   });
   await test('env: onedrive mode requires client id + 64-hex encryption key', () => {
-    assert.throws(() => loadEnv({ GRAPH_MODE: 'onedrive' } as NodeJS.ProcessEnv), /AZURE_CLIENT_ID/);
-    assert.throws(() => loadEnv({ GRAPH_MODE: 'onedrive', AZURE_CLIENT_ID: 'x', TOKEN_ENCRYPTION_KEY: 'short' } as NodeJS.ProcessEnv), /64 hex/);
-    const ok = loadEnv({ GRAPH_MODE: 'onedrive', AZURE_CLIENT_ID: 'x', TOKEN_ENCRYPTION_KEY: KEY } as NodeJS.ProcessEnv);
+    assert.throws(() => loadEnv({ JWT_SECRET: JWT, GRAPH_MODE: 'onedrive' } as NodeJS.ProcessEnv), /AZURE_CLIENT_ID/);
+    assert.throws(() => loadEnv({ JWT_SECRET: JWT, GRAPH_MODE: 'onedrive', AZURE_CLIENT_ID: 'x', TOKEN_ENCRYPTION_KEY: 'short' } as NodeJS.ProcessEnv), /64 hex/);
+    const ok = loadEnv({ JWT_SECRET: JWT, GRAPH_MODE: 'onedrive', AZURE_CLIENT_ID: 'x', TOKEN_ENCRYPTION_KEY: KEY } as NodeJS.ProcessEnv);
     assert.equal(ok.GRAPH_MODE, 'onedrive');
   });
   await test('sign-in problems keep records queued with a clear reason', async () => {
@@ -299,6 +318,21 @@ async function main(): Promise<void> {
     await Promise.all([ledger.append(SHEET_PATH, [row(1)]), ledger.append(SHEET_PATH, [row(2)])]);
     assert.equal(api.tabs.size, 1); assert.equal(api.tabs.get('Sales_Ledger_2026-11')!.rows.length, 2);
   });
+  await test('sheets: appended cells carry explicit dark, non-bold formatting (no header inheritance)', () => {
+    const req = buildAppendCells(7, [[46336.5, 'NYC1', '=cmd|calc', 3, 1250.5, 'rid']]).appendCells;
+    assert.equal(req.sheetId, 7);
+    const cells = req.rows[0]!.values;
+    assert.equal(cells.length, 6);
+    for (const c of cells) {
+      assert.equal(c.userEnteredFormat.textFormat.bold, false);
+      const fg = c.userEnteredFormat.textFormat.foregroundColor;
+      assert.ok(fg.red < 0.3 && fg.green < 0.3 && fg.blue < 0.3, 'text must be dark, never white');
+    }
+    assert.deepEqual(cells[0]!.userEnteredValue, { numberValue: 46336.5 });
+    assert.equal((cells[0]!.userEnteredFormat as NumFmt).numberFormat?.type, 'DATE_TIME');
+    assert.equal((cells[4]!.userEnteredFormat as NumFmt).numberFormat?.pattern, '#,##0.00');
+    assert.deepEqual(cells[2]!.userEnteredValue, { stringValue: '=cmd|calc' }); // literal text, never a formula
+  });
   await test('sheets: SKU is passed through as plain text for RAW insertion', async () => {
     const api = new MemorySheets();
     await new GoogleSheetsLedger(api).append(SHEET_PATH, [{ ...row(1), sku: '=cmd|calc' }]);
@@ -326,8 +360,8 @@ async function main(): Promise<void> {
     assert.equal(parseServiceAccountJson(good).client_email, 'a@b.iam.gserviceaccount.com');
     assert.throws(() => parseServiceAccountJson('%%%'), /valid base64/);
     assert.throws(() => parseServiceAccountJson(Buffer.from('{}').toString('base64')), /client_email/);
-    assert.throws(() => loadEnv({ GRAPH_MODE: 'sheets' } as NodeJS.ProcessEnv), /GOOGLE_SHEET_ID/);
-    assert.equal(loadEnv({ GRAPH_MODE: 'sheets', GOOGLE_SHEET_ID: 'x', GOOGLE_SERVICE_ACCOUNT_JSON_BASE64: good } as NodeJS.ProcessEnv).GRAPH_MODE, 'sheets');
+    assert.throws(() => loadEnv({ JWT_SECRET: JWT, GRAPH_MODE: 'sheets' } as NodeJS.ProcessEnv), /GOOGLE_SHEET_ID/);
+    assert.equal(loadEnv({ JWT_SECRET: JWT, GRAPH_MODE: 'sheets', GOOGLE_SHEET_ID: 'x', GOOGLE_SERVICE_ACCOUNT_JSON_BASE64: good } as NodeJS.ProcessEnv).GRAPH_MODE, 'sheets');
   });
 
   console.log('\nSyncWorker (outbox)');
@@ -391,8 +425,177 @@ async function main(): Promise<void> {
     assert.equal((await readSheet(drive.getFile(PATH))).rowCount, 3);
   });
 
+  console.log('\nOrder ledger (approved orders -> sheet)');
+  const baseOrder = (over: Partial<OrderLedgerRow> = {}): OrderLedgerRow => ({
+    orderNo: 'ORD-20261113-0001', approvedAt: new Date('2026-11-13T09:30:00Z'), branchName: 'Thindigua', supplierName: 'Brookside Dairy Ltd.',
+    status: 'approved', lines: [{ itemNo: 'JT00011', description: 'Milk 500Ml', qty: 2400 }, { itemNo: 'JT00017', description: '=Ghee 1Kg', qty: 6 }], ...over,
+  });
+  await test('tab name follows approval month in Nairobi time', () => {
+    assert.equal(orderTabFor('Orders', new Date('2026-11-13T09:30:00Z')), 'Orders_2026-11');
+    assert.equal(orderTabFor('Orders', new Date('2026-11-30T21:30:00Z')), 'Orders_2026-12'); // 00:30 on 1 Dec in Nairobi
+  });
+  await test('first sync creates the tab with the order header and appends one row per line', async () => {
+    const api = new MemorySheets(); const sink = new GoogleSheetsOrderLedger(api);
+    const r = await sink.sync('Orders_2026-11', baseOrder());
+    assert.deepEqual(r, { created: true, added: 2, updated: 0 });
+    const t = api.tabs.get('Orders_2026-11')!;
+    assert.deepEqual(t.header, ORDER_HEADER);
+    assert.ok(t.formatted);
+    assert.equal(t.rows.length, 2);
+    assert.deepEqual(t.rows[0]!.slice(1, 3), ['ORD-20261113-0001', '']);
+    assert.equal(t.rows[0]![9], 'ORD-20261113-0001:JT00011');
+    assert.equal(t.rows[1]![6], '=Ghee 1Kg'); // kept as literal text
+    // 09:30 UTC is 12:30 in Nairobi
+    assert.ok(Math.abs((t.rows[0]![0] as number) % 1 - 12.5 / 24) < 1e-6);
+  });
+  await test('re-sync never duplicates rows; PO number and status are refreshed in place', async () => {
+    const api = new MemorySheets(); const sink = new GoogleSheetsOrderLedger(api);
+    await sink.sync('T', baseOrder());
+    const r = await sink.sync('T', baseOrder({ poNumber: 'PO12345', status: 'sent' }));
+    assert.deepEqual(r, { created: false, added: 0, updated: 2 });
+    const rows = api.tabs.get('T')!.rows;
+    assert.equal(rows.length, 2);
+    assert.ok(rows.every((x) => x[2] === 'PO12345' && x[8] === 'Sent to supplier'));
+    await sink.sync('T', baseOrder({ poNumber: 'PO12345', status: 'cancelled' }));
+    assert.ok(rows.every((x) => x[8] === 'Cancelled'));
+  });
+  await test('two orders in one tab stay separate', async () => {
+    const api = new MemorySheets(); const sink = new GoogleSheetsOrderLedger(api);
+    await sink.sync('T', baseOrder());
+    await sink.sync('T', baseOrder({ orderNo: 'ORD-20261113-0002', branchName: 'Ruaka' }));
+    await sink.sync('T', baseOrder({ poNumber: 'PO9' }));
+    const rows = api.tabs.get('T')!.rows;
+    assert.equal(rows.length, 4);
+    assert.deepEqual(rows.map((r) => r[2]), ['PO9', 'PO9', '', '']);
+  });
+
+  class MemoryOrderStore implements OrderLedgerStore {
+    jobs = new Map<string, LedgerJob & { state: 'pending' | 'processing' | 'synced' | 'failed'; next: Date; rev: number }>();
+    add(id: string, over: Partial<OrderLedgerRow> = {}) { this.jobs.set(id, { id, rev: 0, attempts: 0, ...baseOrder({ orderNo: `ORD-${id}`, ...over }), state: 'pending', next: new Date(0) }); }
+    requeue(id: string, over: Partial<OrderLedgerRow>) { const j = this.jobs.get(id)!; Object.assign(j, over, { state: 'pending', rev: j.rev + 1, attempts: 0, next: new Date(0) }); }
+    async reclaimStale() { return 0; }
+    async claimNext(now: Date) {
+      for (const j of this.jobs.values()) if (j.state === 'pending' && j.next <= now) { j.state = 'processing'; return { ...j }; }
+      return null;
+    }
+    async markSynced(job: LedgerJob) { const j = this.jobs.get(job.id)!; if (j.rev === job.rev) j.state = 'synced'; }
+    async markFailed(job: LedgerJob, f: LedgerFailure) { const j = this.jobs.get(job.id)!; if (j.rev !== job.rev) return; j.attempts = f.attempts; j.state = f.failed ? 'failed' : 'pending'; j.next = f.nextAt; }
+    async countOpen() { return [...this.jobs.values()].filter((j) => j.state === 'pending' || j.state === 'processing').length; }
+  }
+  const opts = { pollMs: 50, maxAttempts: 3, backoffBaseMs: 100, lockTimeoutMs: 60_000, tabPrefix: 'Orders' };
+  await test('worker pushes approved orders, then picks up a later PO number without duplicating rows', async () => {
+    const api = new MemorySheets(); const store = new MemoryOrderStore();
+    const w = new OrderLedgerWorker(store, new GoogleSheetsOrderLedger(api), opts);
+    store.add('1'); store.add('2', { branchName: 'Ruaka' });
+    await w.drain();
+    assert.equal(api.tabs.get('Orders_2026-11')!.rows.length, 4);
+    store.requeue('1', { poNumber: 'PO77', status: 'sent' });
+    await w.drain();
+    const rows = api.tabs.get('Orders_2026-11')!.rows;
+    assert.equal(rows.length, 4);
+    assert.equal(rows.filter((r) => r[2] === 'PO77').length, 2);
+  });
+  await test('worker retries transient Sheets errors with backoff and succeeds after recovery', async () => {
+    const api = new MemorySheets(); const store = new MemoryOrderStore();
+    let down = true;
+    const flaky: OrderLedgerSinkLike = { sync: async (t, o) => { if (down) throw new GraphError('boom', 'transient'); return new GoogleSheetsOrderLedger(api).sync(t, o); } };
+    const w = new OrderLedgerWorker(store, flaky, opts);
+    store.add('1');
+    await w.kick();
+    assert.equal(store.jobs.get('1')!.state, 'pending');
+    assert.equal(store.jobs.get('1')!.attempts, 1);
+    down = false; store.jobs.get('1')!.next = new Date(0);
+    await w.drain();
+    assert.equal(store.jobs.get('1')!.state, 'synced');
+    assert.equal(api.tabs.get('Orders_2026-11')!.rows.length, 2);
+  });
+  await test('worker gives up on permanent errors and after max attempts; a change during sync keeps it queued', async () => {
+    const store = new MemoryOrderStore();
+    const dead: OrderLedgerSinkLike = { sync: async () => { throw new GraphError('forbidden', 'permanent', 403); } };
+    const w = new OrderLedgerWorker(store, dead, opts);
+    store.add('1'); await w.kick();
+    assert.equal(store.jobs.get('1')!.state, 'failed');
+    const api = new MemorySheets();
+    const store2 = new MemoryOrderStore(); store2.add('9');
+    let once = true;
+    const racing: OrderLedgerSinkLike = { sync: async (t, o) => { const r = await new GoogleSheetsOrderLedger(api).sync(t, o); if (once) { once = false; store2.requeue('9', { poNumber: 'PO1' }); } return r; } };
+    const w2 = new OrderLedgerWorker(store2, racing, opts);
+    await w2.drain();
+    assert.equal(store2.jobs.get('9')!.state, 'synced');
+    assert.equal(api.tabs.get('Orders_2026-11')!.rows.every((r) => r[2] === 'PO1'), true); // the PO change made during the sync is not lost
+  });
+
+  console.log('\nOrders: pure rules');
+  const cat = new Map<string, CatalogItem>([
+    ['JT1', { itemNo: 'JT1', description: 'Milk', supplierCode: 'V0002' }],
+    ['JT2', { itemNo: 'JT2', description: 'Ghee', supplierCode: 'V0002' }],
+    ['JT3', { itemNo: 'JT3', description: 'Bread', supplierCode: 'V0017' }],
+  ]);
+  await test('basket splits into one group per supplier, merges duplicates, reports unknown items', () => {
+    const { groups, unknown } = groupBySupplier(
+      [{ itemNo: 'jt1', qty: 2 }, { itemNo: 'JT1', qty: 3 }, { itemNo: 'JT3', qty: 1 }, { itemNo: 'JT2', qty: 4 }, { itemNo: 'ZZ9', qty: 1 }], cat);
+    assert.deepEqual([...groups.keys()].sort(), ['V0002', 'V0017']);
+    assert.deepEqual(groups.get('V0002')!.map((l) => [l.itemNo, l.qty]), [['JT1', 5], ['JT2', 4]]);
+    assert.deepEqual(unknown, ['ZZ9']);
+    assert.deepEqual(mergeLines([{ itemNo: ' a ', qty: 1 }, { itemNo: 'A', qty: 2 }]), [{ itemNo: 'A', qty: 3 }]);
+  });
+  await test('status transitions: HQ follows the lifecycle, branch may only cancel a submitted order', () => {
+    assert.ok(canTransition('submitted', 'approved', 'hq'));
+    assert.ok(canTransition('approved', 'sent', 'hq'));
+    assert.ok(canTransition('sent', 'fulfilled', 'hq'));
+    assert.ok(!canTransition('submitted', 'sent', 'hq'));
+    assert.ok(!canTransition('rejected', 'approved', 'hq'));
+    assert.ok(!canTransition('fulfilled', 'cancelled', 'hq'));
+    assert.ok(canTransition('submitted', 'cancelled', 'branch'));
+    assert.ok(!canTransition('approved', 'cancelled', 'branch'));
+    assert.ok(!canTransition('submitted', 'approved', 'branch'));
+  });
+  await test('HQ edits: only lines already on the order, at least one must remain', () => {
+    const cur = [{ itemNo: 'JT1', description: 'Milk', qty: 5 }, { itemNo: 'JT2', description: 'Ghee', qty: 4 }];
+    const ok = applyLineEdits(cur, [{ itemNo: 'JT1', qty: 2 }]);
+    assert.ok(ok.ok && ok.lines.length === 1 && ok.lines[0]!.qty === 2 && ok.lines[0]!.description === 'Milk');
+    assert.ok(!applyLineEdits(cur, [{ itemNo: 'JT9', qty: 1 }]).ok);
+    assert.ok(!applyLineEdits(cur, []).ok);
+  });
+  await test('PO numbers are normalised and validated; totals aggregate per item across branches', () => {
+    assert.equal(normalizePo(' po 123/26 '), 'PO123/26');
+    assert.equal(normalizePo('x'), null);
+    assert.equal(normalizePo('bad!chars'), null);
+    const t = totalsByItem([
+      { lines: [{ itemNo: 'JT1', description: 'Milk', qty: 5 }] },
+      { lines: [{ itemNo: 'JT1', description: 'Milk', qty: 7 }, { itemNo: 'JT0', description: 'Cream', qty: 1 }] },
+    ]);
+    assert.deepEqual(t.map((r) => [r.itemNo, r.qty]), [['JT0', 1], ['JT1', 12]]);
+  });
+  await test('submit schema: needs a UUID request id, whole positive quantities, bounded size', () => {
+    const good = { requestId: crypto.randomUUID(), lines: [{ itemNo: 'JT00011', qty: 10 }] };
+    assert.ok(submitOrderSchema.safeParse(good).success);
+    assert.ok(!submitOrderSchema.safeParse({ ...good, requestId: 'nope' }).success);
+    assert.ok(!submitOrderSchema.safeParse({ ...good, lines: [{ itemNo: 'JT1', qty: 0 }] }).success);
+    assert.ok(!submitOrderSchema.safeParse({ ...good, lines: [{ itemNo: 'JT1', qty: 1.5 }] }).success);
+    assert.ok(!submitOrderSchema.safeParse({ ...good, lines: [] }).success);
+    assert.ok(!submitOrderSchema.safeParse({ ...good, lines: [{ itemNo: '=cmd', qty: 1 }] }).success);
+  });
+  await test('import reader: finds headers in any sheet, cleans non-breaking spaces, skips unusable sheets', async () => {
+    const wb = new ExcelJS.Workbook();
+    const a = wb.addWorksheet('BROOKSIDE');
+    a.addRow(['CODE', 'Description', 'QTY']);
+    const b = wb.addWorksheet('Items');
+    b.addRow(['Item No.', 'Description', 'Supplier No.']);
+    b.addRow(['jt00011', 'Brookside\u00a0Dairybest\u00a0Milk\u00a0500Ml', 'v0002']);
+    b.addRow([]);
+    b.addRow(['JT00012', 'Fresh  Milk', 'V0002']);
+    const nohead = wb.addWorksheet('DPL');
+    nohead.addRow(['JT00658', 'Festive Milky White Bread 400Gm', 10]);
+    const rows = await readTable(Buffer.from(await wb.xlsx.writeBuffer()), 'items');
+    assert.equal(rows.length, 2);
+    assert.equal(rows[0]!.description, 'Brookside Dairybest Milk 500Ml');
+    assert.equal(rows[1]!.description, 'Fresh Milk');
+    assert.equal(rows[0]!.supplierCode, 'v0002');
+  });
+
   console.log('\nHTTP layer (no database required)');
-  const env = loadEnv({ NODE_ENV: 'test', GRAPH_MODE: 'mock' } as NodeJS.ProcessEnv);
+  const env = loadEnv({ JWT_SECRET: JWT, NODE_ENV: 'test', GRAPH_MODE: 'mock' } as NodeJS.ProcessEnv);
   const { worker } = rig();
   const server = createApp({ env, worker }).listen(0);
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -412,14 +615,23 @@ async function main(): Promise<void> {
     assert.equal((await fetch(`${base}/api/sales/x/retry`, { method: 'POST' })).status, 401);
     assert.equal((await fetch(`${base}/api/sales/retry-failed`, { method: 'POST' })).status, 401);
   });
+  await test('auth: orders/catalogue/admin need a token; login validates its body; bad token rejected', async () => {
+    for (const path of ['/api/orders', '/api/orders/summary', '/api/catalogue/suppliers', '/api/admin/users', '/api/auth/me']) {
+      assert.equal((await fetch(`${base}${path}`)).status, 401, path);
+    }
+    assert.equal((await fetch(`${base}/api/orders`, { headers: { authorization: 'Bearer garbage' } })).status, 401);
+    const bad = await fetch(`${base}/api/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+    assert.equal(bad.status, 422);
+  });
   await test('security headers present, x-powered-by hidden', async () => {
     const res = await fetch(`${base}/api/health`);
     assert.equal(res.headers.get('x-powered-by'), null);
     assert.ok(res.headers.get('x-content-type-options'));
   });
   await test('env validation: live mode demands Azure settings; mock banned in production', () => {
-    assert.throws(() => loadEnv({ GRAPH_MODE: 'live' } as NodeJS.ProcessEnv), /AZURE_TENANT_ID/);
-    assert.throws(() => loadEnv({ NODE_ENV: 'production', GRAPH_MODE: 'mock' } as NodeJS.ProcessEnv), /not allowed in production/);
+    assert.throws(() => loadEnv({ JWT_SECRET: JWT, GRAPH_MODE: 'live' } as NodeJS.ProcessEnv), /AZURE_TENANT_ID/);
+    assert.throws(() => loadEnv({ GRAPH_MODE: 'mock', JWT_SECRET: 'short' } as NodeJS.ProcessEnv), /JWT_SECRET/);
+    assert.throws(() => loadEnv({ JWT_SECRET: JWT, NODE_ENV: 'production', GRAPH_MODE: 'mock' } as NodeJS.ProcessEnv), /not allowed in production/);
   });
   server.close();
 

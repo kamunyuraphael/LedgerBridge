@@ -8,19 +8,46 @@ const SHEETS_BASE = 'https://sheets.googleapis.com/v4/spreadsheets';
 const SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
 const NAVY = { red: 0.122, green: 0.22, blue: 0.392 };
 const ZEBRA = { red: 0.949, green: 0.961, blue: 0.98 };
-const RECORD_ID_COL_INDEX = 5; // column F
 
 /** Low-level operations on ONE spreadsheet. Real implementation: REST; tests: in-memory. */
 export interface SheetsApi {
-  listTabs(): Promise<string[]>;
+  /** Map of tab title -> sheetId. */
+  listTabs(): Promise<Map<string, number>>;
   /** Returns the new tab's sheetId, or null if a tab with that title already exists (create race). */
-  createTab(title: string): Promise<number | null>;
+  createTab(title: string, columns?: number): Promise<number | null>;
   writeHeader(title: string, header: string[]): Promise<void>;
-  formatLedgerTab(sheetId: number): Promise<void>;
+  formatLedgerTab(sheetId: number, layout?: TabLayout): Promise<void>;
   /** Values of column F (Record ID), from row 2 down. */
   readRecordIds(title: string): Promise<string[]>;
-  appendRows(title: string, rows: (string | number)[][]): Promise<void>;
+  /** Appends rows below the last row of data, each cell with its own explicit format. */
+  appendRows(sheetId: number, rows: SheetRow[], formats?: readonly ColumnFormat[]): Promise<void>;
+  /** Raw values of one column from row 2 down; empty cells come back as '' so index i is row i + 2. */
+  readColumn(title: string, colIndex: number): Promise<string[]>;
+  /** Overwrites individual cells (row is the 1-based sheet row, col the 0-based column). */
+  updateCells(title: string, updates: { row: number; col: number; value: string | number }[]): Promise<void>;
 }
+
+export type SheetRow = (string | number)[]; // sales: serial, store, sku, units, revenue, recordId
+export type ColumnFormat = { numberFormat?: { type: string; pattern: string }; horizontalAlignment: string };
+
+/** Shape of a ledger tab: which columns are visible, how wide, and where the hidden Record ID lives. */
+export interface TabLayout {
+  headerCols: number;
+  visibleCols: number;
+  widths: number[];
+}
+export const SALES_LAYOUT: TabLayout = { headerCols: 6, visibleCols: 5, widths: [170, 130, 130, 130, 130] };
+
+/** 0 -> A, 25 -> Z, 26 -> AA */
+export const colLetter = (i: number): string => {
+  let n = i;
+  let out = '';
+  do {
+    out = String.fromCharCode(65 + (n % 26)) + out;
+    n = Math.floor(n / 26) - 1;
+  } while (n >= 0);
+  return out;
+};
 
 export interface ServiceAccount {
   client_email: string;
@@ -108,17 +135,17 @@ export class SheetsRestApi implements SheetsApi {
     return encodeURIComponent(`'${title.replace(/'/g, "''")}'!${a1}`);
   }
 
-  async listTabs(): Promise<string[]> {
-    const res = await this.call<{ sheets?: { properties: { title: string } }[] }>('get', '', undefined, {
-      fields: 'sheets.properties.title',
+  async listTabs(): Promise<Map<string, number>> {
+    const res = await this.call<{ sheets?: { properties: { title: string; sheetId: number } }[] }>('get', '', undefined, {
+      fields: 'sheets.properties(sheetId,title)',
     });
-    return (res.sheets ?? []).map((s) => s.properties.title);
+    return new Map((res.sheets ?? []).map((t) => [t.properties.title, t.properties.sheetId]));
   }
 
-  async createTab(title: string): Promise<number | null> {
+  async createTab(title: string, columns = 6): Promise<number | null> {
     try {
       const res = await this.call<{ replies: { addSheet: { properties: { sheetId: number } } }[] }>('post', ':batchUpdate', {
-        requests: [{ addSheet: { properties: { title, gridProperties: { frozenRowCount: 1, columnCount: 6 } } } }],
+        requests: [{ addSheet: { properties: { title, gridProperties: { frozenRowCount: 1, columnCount: columns } } } }],
       });
       return res.replies[0]?.addSheet.properties.sheetId ?? null;
     } catch (err) {
@@ -128,23 +155,16 @@ export class SheetsRestApi implements SheetsApi {
   }
 
   async writeHeader(title: string, header: string[]): Promise<void> {
-    await this.call('put', `/values/${this.range(title, 'A1:F1')}`, { values: [header] }, { valueInputOption: 'RAW' });
+    await this.call('put', `/values/${this.range(title, `A1:${colLetter(header.length - 1)}1`)}`, { values: [header] }, { valueInputOption: 'RAW' });
   }
 
-  async formatLedgerTab(sheetId: number): Promise<void> {
-    const col = (start: number, end: number, rowStart = 1) => ({ sheetId, startRowIndex: rowStart, startColumnIndex: start, endColumnIndex: end });
-    const fmt = (start: number, end: number, type: string, pattern: string) => ({
-      repeatCell: {
-        range: col(start, end),
-        cell: { userEnteredFormat: { numberFormat: { type, pattern } } },
-        fields: 'userEnteredFormat.numberFormat',
-      },
-    });
+  async formatLedgerTab(sheetId: number, layout: TabLayout = SALES_LAYOUT): Promise<void> {
+    const hiddenCol = layout.headerCols - 1; // the Record ID is always the last column
     await this.call('post', ':batchUpdate', {
       requests: [
         {
           repeatCell: {
-            range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 6 },
+            range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: layout.headerCols },
             cell: {
               userEnteredFormat: {
                 backgroundColor: NAVY,
@@ -155,14 +175,12 @@ export class SheetsRestApi implements SheetsApi {
             fields: 'userEnteredFormat(backgroundColor,horizontalAlignment,textFormat)',
           },
         },
-        fmt(0, 1, 'DATE_TIME', 'yyyy-mm-dd hh:mm:ss'),
-        fmt(3, 4, 'NUMBER', '#,##0'),
-        fmt(4, 5, 'NUMBER', '#,##0.00'),
-        { addBanding: { bandedRange: { range: { sheetId, startRowIndex: 0, startColumnIndex: 0, endColumnIndex: 5 }, rowProperties: { headerColor: NAVY, firstBandColor: { red: 1, green: 1, blue: 1 }, secondBandColor: ZEBRA } } } },
-        { setBasicFilter: { filter: { range: { sheetId, startRowIndex: 0, startColumnIndex: 0, endColumnIndex: 5 } } } },
-        { updateDimensionProperties: { range: { sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 }, properties: { pixelSize: 170 }, fields: 'pixelSize' } },
-        { updateDimensionProperties: { range: { sheetId, dimension: 'COLUMNS', startIndex: 1, endIndex: 5 }, properties: { pixelSize: 130 }, fields: 'pixelSize' } },
-        { updateDimensionProperties: { range: { sheetId, dimension: 'COLUMNS', startIndex: RECORD_ID_COL_INDEX, endIndex: RECORD_ID_COL_INDEX + 1 }, properties: { hiddenByUser: true }, fields: 'hiddenByUser' } },
+        { addBanding: { bandedRange: { range: { sheetId, startRowIndex: 0, startColumnIndex: 0, endColumnIndex: layout.visibleCols }, rowProperties: { headerColor: NAVY, firstBandColor: { red: 1, green: 1, blue: 1 }, secondBandColor: ZEBRA } } } },
+        { setBasicFilter: { filter: { range: { sheetId, startRowIndex: 0, startColumnIndex: 0, endColumnIndex: layout.visibleCols } } } },
+        ...layout.widths.map((w, i) => ({
+          updateDimensionProperties: { range: { sheetId, dimension: 'COLUMNS', startIndex: i, endIndex: i + 1 }, properties: { pixelSize: w }, fields: 'pixelSize' },
+        })),
+        { updateDimensionProperties: { range: { sheetId, dimension: 'COLUMNS', startIndex: hiddenCol, endIndex: hiddenCol + 1 }, properties: { hiddenByUser: true }, fields: 'hiddenByUser' } },
       ],
     });
   }
@@ -172,13 +190,53 @@ export class SheetsRestApi implements SheetsApi {
     return (res.values ?? []).map((r) => r[0] ?? '').filter(Boolean);
   }
 
-  async appendRows(title: string, rows: (string | number)[][]): Promise<void> {
-    // RAW: values are stored exactly as sent, so a SKU like "=1+1" can never become a formula.
-    await this.call('post', `/values/${this.range(title, 'A:F')}:append`, { values: rows }, {
+  async appendRows(sheetId: number, rows: SheetRow[], formats: readonly ColumnFormat[] = CELL_FORMATS): Promise<void> {
+    await this.call('post', ':batchUpdate', { requests: [buildAppendCells(sheetId, rows, formats)] });
+  }
+
+  async readColumn(title: string, colIndex: number): Promise<string[]> {
+    const L = colLetter(colIndex);
+    const res = await this.call<{ values?: string[][] }>('get', `/values/${this.range(title, `${L}2:${L}`)}`);
+    return (res.values ?? []).map((r) => r[0] ?? '');
+  }
+
+  async updateCells(title: string, updates: { row: number; col: number; value: string | number }[]): Promise<void> {
+    if (updates.length === 0) return;
+    await this.call('post', '/values:batchUpdate', {
       valueInputOption: 'RAW',
-      insertDataOption: 'INSERT_ROWS',
+      data: updates.map((u) => ({ range: `'${title.replace(/'/g, "''")}'!${colLetter(u.col)}${u.row}`, values: [[u.value]] })),
     });
   }
+}
+
+const INK = { red: 0.09, green: 0.13, blue: 0.11 };
+export const CELL_FORMATS: readonly ColumnFormat[] = [
+  { numberFormat: { type: 'DATE_TIME', pattern: 'yyyy-mm-dd hh:mm:ss' }, horizontalAlignment: 'LEFT' },
+  { horizontalAlignment: 'CENTER' },
+  { numberFormat: { type: 'TEXT', pattern: '@' }, horizontalAlignment: 'LEFT' },
+  { numberFormat: { type: 'NUMBER', pattern: '#,##0' }, horizontalAlignment: 'RIGHT' },
+  { numberFormat: { type: 'NUMBER', pattern: '#,##0.00' }, horizontalAlignment: 'RIGHT' },
+  { horizontalAlignment: 'LEFT' },
+];
+
+/**
+ * One appendCells request. Every cell gets an explicit format (dark, non-bold text), so rows
+ * never inherit the header's white-on-navy style. Text goes in as `stringValue`, which Sheets
+ * stores literally, so a SKU like "=1+1" can never become a formula.
+ */
+export function buildAppendCells(sheetId: number, rows: SheetRow[], formats: readonly ColumnFormat[] = CELL_FORMATS) {
+  return {
+    appendCells: {
+      sheetId,
+      rows: rows.map((row) => ({
+        values: row.map((v, i) => ({
+          userEnteredValue: typeof v === 'number' ? { numberValue: v } : { stringValue: v },
+          userEnteredFormat: { ...formats[i], textFormat: { bold: false, foregroundColor: INK } },
+        })),
+      })),
+      fields: 'userEnteredValue,userEnteredFormat',
+    },
+  };
 }
 
 /** Spreadsheet serial date: days since 1899-12-30 (what Sheets/Excel use for date-times). */
@@ -198,22 +256,27 @@ export class GoogleSheetsLedger implements LedgerSink {
     const tab = tabNameFor(path);
     let created = false;
 
-    if (!(await this.api.listTabs()).includes(tab)) {
-      const sheetId = await this.api.createTab(tab); // null = another writer just created it
-      if (sheetId !== null) {
+    let sheetId = (await this.api.listTabs()).get(tab);
+    if (sheetId === undefined) {
+      const newId = await this.api.createTab(tab); // null = another writer just created it
+      if (newId !== null) {
         await this.api.writeHeader(tab, ['Timestamp (UTC)', 'Store Code', 'SKU', 'Units Sold', `Total Revenue (${this.currency})`, 'Record ID']);
-        await this.api.formatLedgerTab(sheetId);
+        await this.api.formatLedgerTab(newId);
         created = true;
+        sheetId = newId;
         logger.info('sheets.tab_created', { tab });
+      } else {
+        sheetId = (await this.api.listTabs()).get(tab);
       }
     }
+    if (sheetId === undefined) throw new GraphError(`Could not find or create tab "${tab}"`, 'transient');
 
     const existing = new Set(await this.api.readRecordIds(tab));
     const fresh = rows.filter((r) => !existing.has(r.recordId));
     if (fresh.length > 0) {
       await this.api.appendRows(
-        tab,
-        fresh.map((r) => [toSerialDate(r.timestamp), r.storeCode, r.sku, r.unitsSold, r.totalRevenue, r.recordId]),
+        sheetId,
+        fresh.map((r): SheetRow => [toSerialDate(r.timestamp), r.storeCode, r.sku, r.unitsSold, r.totalRevenue, r.recordId]),
       );
     }
     return { created, added: fresh.length, skippedDuplicates: rows.length - fresh.length };

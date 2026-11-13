@@ -102,13 +102,6 @@
   }
 }
 
-.ledger-grid {
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.11) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.11) 1px, transparent 1px);
-  background-size: 56px 56px;
-  mask-image: linear-gradient(to bottom right, transparent 3%, black 54%, transparent 96%);
-}
 
 @media (prefers-reduced-motion: reduce) {
   *,

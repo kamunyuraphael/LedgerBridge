@@ -17,6 +17,13 @@ const schema = z
 
     MONGODB_URI: z.string().min(1).default('mongodb://127.0.0.1:27017/ledgerbridge'),
 
+    /** Signs login tokens. Min 32 chars; generate with: node -e "console.log(require('crypto').randomBytes(48).toString('hex'))" */
+    JWT_SECRET: z.string().min(32, 'must be at least 32 characters'),
+    JWT_EXPIRES_IN: z.string().default('12h'),
+    /** First HQ account, created at startup only if no HQ user exists yet. */
+    BOOTSTRAP_ADMIN_USERNAME: z.string().trim().min(3).default('hq'),
+    BOOTSTRAP_ADMIN_PASSWORD: z.string().min(8).optional(),
+
     /** Protects admin-only routes (e.g. retry). Never ship this to the client. */
     ADMIN_API_KEY: z.string().min(16).optional(),
 
@@ -33,6 +40,14 @@ const schema = z
     SP_SITE_ID: z.string().optional(),
     SP_DRIVE_ID: z.string().optional(),
     SP_FOLDER_PATH: z.string().default('Ledgers'),
+
+    /** Tab prefix for the approved-orders ledger (sheets mode), e.g. Orders_2026-11. */
+    ORDER_LEDGER_PREFIX: z.string().trim().min(1).max(40).default('Orders'),
+    /** Load simulated branches and products (with demo logins) when the database is empty. */
+    SEED_DEMO_DATA: z
+      .enum(['true', 'false'])
+      .optional()
+      .transform((v) => (v === undefined ? undefined : v === 'true')),
 
     LEDGER_FILE_PREFIX: z.string().min(1).default('Sales_Ledger'),
     /** Currency shown in the ledger's revenue column header. */
