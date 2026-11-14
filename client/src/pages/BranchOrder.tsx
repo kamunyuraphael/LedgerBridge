@@ -4,30 +4,34 @@ import { errorMessage } from '../api/client'
 import type { Item, Order, Supplier } from '../api/types'
 import { useAuth } from '../authContext'
 import { Button, Card, ErrorBanner, Notice, TextInput } from '../components/ui'
-import { nf } from '../format'
 
-const MAX_QTY = 100_000
-type Basket = Record<string, number>
+interface Saved {
+  picked: string[]
+  items: Record<string, Item>
+}
 
-function loadBasket(key: string): { basket: Basket; items: Record<string, Item> } {
+function loadSaved(key: string): Saved {
   try {
     const raw = localStorage.getItem(key)
-    if (raw) return JSON.parse(raw) as { basket: Basket; items: Record<string, Item> }
+    if (raw) {
+      const v = JSON.parse(raw) as Partial<Saved>
+      if (Array.isArray(v.picked) && v.picked.every((x) => typeof x === 'string') && v.items && typeof v.items === 'object') return v as Saved
+    }
   } catch {
     /* ignore */
   }
-  return { basket: {}, items: {} }
+  return { picked: [], items: {} }
 }
 
 export function BranchOrder({ onViewOrders }: { onViewOrders: () => void }) {
   const { user } = useAuth()
-  const storeKey = `lb.basket.${user?.username ?? ''}`
+  const storeKey = `lb.picks.${user?.username ?? ''}`
   const [suppliers, setSuppliers] = useState<Supplier[] | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const [items, setItems] = useState<Item[]>([])
   const [itemsLoading, setItemsLoading] = useState(false)
-  const [basket, setBasket] = useState<Basket>(() => loadBasket(storeKey).basket)
-  const [known, setKnown] = useState<Record<string, Item>>(() => loadBasket(storeKey).items)
+  const [picked, setPicked] = useState<string[]>(() => loadSaved(storeKey).picked)
+  const [known, setKnown] = useState<Record<string, Item>>(() => loadSaved(storeKey).items)
   const [search, setSearch] = useState('')
   const [supSearch, setSupSearch] = useState('')
   const [reviewing, setReviewing] = useState(false)
@@ -44,11 +48,11 @@ export function BranchOrder({ onViewOrders }: { onViewOrders: () => void }) {
 
   useEffect(() => {
     try {
-      localStorage.setItem(storeKey, JSON.stringify({ basket, items: known }))
+      localStorage.setItem(storeKey, JSON.stringify({ picked, items: known }))
     } catch {
       /* ignore */
     }
-  }, [basket, known, storeKey])
+  }, [picked, known, storeKey])
 
   const select = useCallback(async (code: string) => {
     setSelected(code)
@@ -66,25 +70,19 @@ export function BranchOrder({ onViewOrders }: { onViewOrders: () => void }) {
     }
   }, [])
 
-  function setQty(itemNo: string, raw: string) {
-    const n = Math.min(parseInt(raw.replace(/\D/g, ''), 10) || 0, MAX_QTY)
-    requestId.current = null // basket changed: this is a new submission
-    setBasket((b) => {
-      const next = { ...b }
-      if (n > 0) next[itemNo] = n
-      else delete next[itemNo]
-      return next
-    })
+  function change(fn: (cur: string[]) => string[]) {
+    requestId.current = null // the selection changed: this is a new submission
+    setPicked(fn)
   }
+  const toggle = (itemNo: string) => change((cur) => (cur.includes(itemNo) ? cur.filter((x) => x !== itemNo) : [...cur, itemNo]))
 
   async function repeatLast() {
     if (!selected) return
     try {
-      const lines = await api.lastLines(selected)
-      if (!lines.length) return setError('You have no earlier order for this supplier yet.')
+      const last = await api.lastLines(selected)
+      if (!last.length) return setError('You have no earlier order for this supplier yet.')
       const valid = new Set(items.map((i) => i.itemNo))
-      requestId.current = null
-      setBasket((b) => ({ ...b, ...Object.fromEntries(lines.filter((l) => valid.has(l.itemNo)).map((l) => [l.itemNo, l.qty])) }))
+      change((cur) => [...new Set([...cur, ...last.filter((n) => valid.has(n))])])
     } catch (e) {
       setError(errorMessage(e))
     }
@@ -93,13 +91,14 @@ export function BranchOrder({ onViewOrders }: { onViewOrders: () => void }) {
   const supplierName = useMemo(() => new Map((suppliers ?? []).map((s) => [s.code, s.name])), [suppliers])
   const perSupplier = useMemo(() => {
     const m = new Map<string, number>()
-    for (const no of Object.keys(basket)) {
+    for (const no of picked) {
       const code = known[no]?.supplierCode
       if (code) m.set(code, (m.get(code) ?? 0) + 1)
     }
     return m
-  }, [basket, known])
-  const totalLines = Object.keys(basket).length
+  }, [picked, known])
+  const totalLines = picked.length
+  const chosen = useMemo(() => new Set(picked), [picked])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -115,13 +114,9 @@ export function BranchOrder({ onViewOrders }: { onViewOrders: () => void }) {
     setError(null)
     requestId.current ??= crypto.randomUUID()
     try {
-      const orders = await api.submitOrder(
-        requestId.current,
-        Object.entries(basket).map(([itemNo, qty]) => ({ itemNo, qty })),
-        note.trim(),
-      )
+      const orders = await api.submitOrder(requestId.current, picked, note.trim())
       setDone(orders)
-      setBasket({})
+      setPicked([])
       setNote('')
       setReviewing(false)
       requestId.current = null
@@ -160,7 +155,7 @@ export function BranchOrder({ onViewOrders }: { onViewOrders: () => void }) {
 
   if (reviewing) {
     const groups = new Map<string, string[]>()
-    for (const no of Object.keys(basket)) {
+    for (const no of picked) {
       const code = known[no]?.supplierCode ?? '?'
       groups.set(code, [...(groups.get(code) ?? []), no])
     }
@@ -168,7 +163,7 @@ export function BranchOrder({ onViewOrders }: { onViewOrders: () => void }) {
       <Card className="mx-auto max-w-2xl space-y-5">
         <h2 className="font-display text-lg font-bold text-[#064e3b]">Review your order</h2>
         <p className="text-sm text-[#5b645e]">
-          This will be sent as {groups.size} separate order{groups.size > 1 ? 's' : ''}, one per supplier.
+          This will be sent as {groups.size} separate order{groups.size > 1 ? 's' : ''}, one per supplier. HQ applies the usual quantities.
         </p>
         {error && <ErrorBanner>{error}</ErrorBanner>}
         {[...groups].map(([code, nos]) => (
@@ -179,8 +174,7 @@ export function BranchOrder({ onViewOrders }: { onViewOrders: () => void }) {
                 {nos.map((no) => (
                   <tr key={no} className="border-t border-[#eef1ee]">
                     <td className="py-1.5 pr-2 text-[#758078]">{no}</td>
-                    <td className="py-1.5 pr-2">{known[no]?.description}</td>
-                    <td className="py-1.5 text-right font-semibold">{nf.format(basket[no] ?? 0)}</td>
+                    <td className="py-1.5">{known[no]?.description}</td>
                   </tr>
                 ))}
               </tbody>
@@ -236,7 +230,7 @@ export function BranchOrder({ onViewOrders }: { onViewOrders: () => void }) {
       <Card className="space-y-3">
         <div className="flex items-center justify-between gap-2">
           <h2 className="font-display text-base font-bold text-[#064e3b]">
-            2. Enter quantities{selected ? ` · ${supplierName.get(selected) ?? ''}` : ''}
+            2. Tick what you need{selected ? ` · ${supplierName.get(selected) ?? ''}` : ''}
           </h2>
           {selected && (
             <Button variant="ghost" className="h-8 px-3 text-xs" onClick={() => void repeatLast()}>
@@ -246,31 +240,40 @@ export function BranchOrder({ onViewOrders }: { onViewOrders: () => void }) {
         </div>
         {error && <ErrorBanner>{error}</ErrorBanner>}
         {!selected ? (
-          <p className="text-sm text-[#758078]">Pick a supplier on the left to see its products.</p>
+          <p className="text-sm text-[#758078]">Pick a supplier on the left to see the products you can order. HQ applies the usual quantities.</p>
         ) : itemsLoading ? (
           <p className="text-sm text-[#758078]">Loading products…</p>
         ) : (
           <>
             <TextInput placeholder="Search products or item numbers" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <div className="flex items-center justify-between text-xs text-[#5b645e]">
+              <span>
+                {filtered.filter((i) => chosen.has(i.itemNo)).length} of {filtered.length} selected
+              </span>
+              <span className="flex gap-1">
+                <button className="rounded-lg px-2 py-1 font-semibold text-[#064e3b] hover:bg-[#e8f0eb]" onClick={() => change((cur) => [...new Set([...cur, ...filtered.map((i) => i.itemNo)])])}>
+                  Select all
+                </button>
+                <button className="rounded-lg px-2 py-1 font-semibold text-[#064e3b] hover:bg-[#e8f0eb]" onClick={() => change((cur) => cur.filter((n) => !filtered.some((i) => i.itemNo === n)))}>
+                  Clear
+                </button>
+              </span>
+            </div>
             <ul className="max-h-[28rem] divide-y divide-[#eef1ee] overflow-y-auto pr-1">
-              {filtered.map((i) => (
-                <li key={i.itemNo} className="flex items-center gap-3 py-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium">{i.description}</div>
-                    <div className="text-xs text-[#758078]">{i.itemNo}</div>
-                  </div>
-                  <input
-                    inputMode="numeric"
-                    aria-label={`Quantity for ${i.description}`}
-                    placeholder="0"
-                    value={basket[i.itemNo] ?? ''}
-                    onChange={(e) => setQty(i.itemNo, e.target.value)}
-                    className={`h-10 w-24 rounded-xl border px-3 text-right text-sm font-semibold outline-none focus:border-[#3b7c64] ${
-                      basket[i.itemNo] ? 'border-[#3b7c64] bg-[#eaf5ee]' : 'border-[#d9ded9]'
-                    }`}
-                  />
-                </li>
-              ))}
+              {filtered.map((i) => {
+                const on = chosen.has(i.itemNo)
+                return (
+                  <li key={i.itemNo}>
+                    <label className={`flex cursor-pointer items-center gap-3 rounded-xl px-2 py-2.5 transition ${on ? 'bg-[#eaf5ee]' : 'hover:bg-[#f6f8f6]'}`}>
+                      <input type="checkbox" className="h-5 w-5 flex-none accent-[#064e3b]" checked={on} onChange={() => toggle(i.itemNo)} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">{i.description}</span>
+                        <span className="text-xs text-[#758078]">{i.itemNo}</span>
+                      </span>
+                    </label>
+                  </li>
+                )
+              })}
               {filtered.length === 0 && <li className="py-3 text-sm text-[#758078]">No products match.</li>}
             </ul>
           </>
@@ -285,7 +288,7 @@ export function BranchOrder({ onViewOrders }: { onViewOrders: () => void }) {
           </span>
           <div className="flex gap-2">
             {totalLines > 0 && (
-              <button className="h-10 rounded-xl px-4 text-sm font-semibold text-white hover:bg-white/10" onClick={() => setBasket({})}>
+              <button className="h-10 rounded-xl px-4 text-sm font-semibold text-white hover:bg-white/10" onClick={() => change(() => [])}>
                 Clear
               </button>
             )}

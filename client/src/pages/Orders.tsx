@@ -148,7 +148,7 @@ export function Orders() {
                 <th className="px-4 py-3 font-semibold">Order</th>
                 {isHq && <th className="px-4 py-3 font-semibold">Branch</th>}
                 <th className="px-4 py-3 font-semibold">Supplier</th>
-                <th className="px-4 py-3 text-right font-semibold">Items / Qty</th>
+                <th className="px-4 py-3 text-right font-semibold">{isHq ? 'Items / Qty' : 'Items'}</th>
                 <th className="px-4 py-3 font-semibold">PO no.</th>
                 <th className="px-4 py-3 font-semibold">Status</th>
               </tr>
@@ -163,7 +163,7 @@ export function Orders() {
                   {isHq && <td className="px-4 py-3">{o.branchName}</td>}
                   <td className="px-4 py-3">{o.supplierName}</td>
                   <td className="px-4 py-3 text-right">
-                    {o.lines.length} / {nf.format(o.totalQty)}
+                    {isHq ? `${o.itemCount} / ${nf.format(o.totalQty ?? 0)}` : o.itemCount}
                   </td>
                   <td className="px-4 py-3">{o.poNumber ?? <span className="text-[#a7aea9]">—</span>}</td>
                   <td className="px-4 py-3">

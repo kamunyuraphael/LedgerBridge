@@ -2,6 +2,7 @@ import { Router } from 'express';
 import type { Env } from '../config/env';
 import { Item, Supplier } from '../models/catalog';
 import { requireAuth } from '../services/auth';
+import { orderableFor } from '../services/replenishment';
 
 const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -11,8 +12,10 @@ export function catalogueRouter(env: Env): Router {
 
   /** Suppliers that have orderable items (HQ can pass ?all=true to see every supplier). */
   r.get('/suppliers', async (req, res) => {
+    // Branches only see items that HQ has a standard quantity for (never the quantity itself).
+    const orderable = req.user!.role === 'branch' ? [...(await orderableFor(req.user!.branchCode ?? '')).keys()] : null;
     const counts = await Item.aggregate<{ _id: string; n: number }>([
-      { $match: { active: true } },
+      { $match: { active: true, ...(orderable ? { itemNo: { $in: orderable } } : {}) } },
       { $group: { _id: '$supplierCode', n: { $sum: 1 } } },
     ]);
     const n = new Map(counts.map((c) => [c._id, c.n]));
@@ -31,6 +34,9 @@ export function catalogueRouter(env: Env): Router {
     if (typeof req.query.q === 'string' && req.query.q.trim()) {
       const re = new RegExp(escapeRe(req.query.q.trim()), 'i');
       filter.$or = [{ itemNo: re }, { description: re }];
+    }
+    if (req.user!.role === 'branch') {
+      filter.itemNo = { $in: [...(await orderableFor(req.user!.branchCode ?? '')).keys()] };
     }
     const items = await Item.find(filter).sort({ description: 1 }).limit(1000).lean();
     res.json(items.map((i) => ({ itemNo: i.itemNo, description: i.description, supplierCode: i.supplierCode })));

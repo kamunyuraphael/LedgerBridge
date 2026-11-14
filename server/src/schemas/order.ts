@@ -11,10 +11,11 @@ const itemNo = z
   .regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/, 'Invalid item number');
 const qty = z.number().int().min(1).max(MAX_QTY);
 
+/** Branches choose items only. Quantities come from HQ's standard quantities on the server. */
 export const submitOrderSchema = z.object({
   requestId: z.uuid(),
   note: z.string().trim().max(500).optional(),
-  lines: z.array(z.object({ itemNo, qty })).min(1).max(MAX_LINES),
+  itemNos: z.array(itemNo).min(1).max(MAX_LINES),
 });
 
 export const transitionSchema = z.object({

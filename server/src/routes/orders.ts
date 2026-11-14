@@ -80,7 +80,7 @@ export function ordersRouter(env: Env): Router {
   });
 
   r.get('/template/:supplierCode', branch, async (req, res) => {
-    res.json({ lines: await lastOrderLines(req.user!, String(req.params.supplierCode)) });
+    res.json({ itemNos: await lastOrderLines(req.user!, String(req.params.supplierCode)) });
   });
 
   /** HQ: one workbook per request: totals per item (what to tell the supplier) + per-branch breakdown. */

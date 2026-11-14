@@ -23,7 +23,8 @@ export interface Item {
 export interface Line {
   itemNo: string
   description: string
-  qty: number
+  /** Present for HQ only; branches never receive quantities. */
+  qty?: number
 }
 export interface Order {
   id: string
@@ -35,7 +36,8 @@ export interface Order {
   status: OrderStatus
   lines: Line[]
   originalLines?: Line[]
-  totalQty: number
+  itemCount: number
+  totalQty?: number
   note?: string
   rejectionReason?: string
   poNumber?: string

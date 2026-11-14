@@ -13,8 +13,9 @@ import { mapError } from '../services/graph/graphHttpClient';
 import { DelegatedTokenProvider, NOT_SIGNED_IN } from '../services/graph/tokenProviders';
 import { decrypt, encrypt } from '../utils/crypto';
 import { readTable } from '../services/importers';
+import { presentOrder } from '../services/orderService';
 import {
-  applyLineEdits, canTransition, groupBySupplier, mergeLines, normalizePo, totalsByItem, type CatalogItem,
+  applyLineEdits, canTransition, groupBySupplier, mergeLines, normalizePo, resolveQuantities, totalsByItem, type CatalogItem,
 } from '../services/orderLogic';
 import { submitOrderSchema } from '../schemas/order';
 import { GoogleSheetsOrderLedger, ORDER_HEADER, orderTabFor, type OrderLedgerRow } from '../services/orderLedger';
@@ -567,14 +568,44 @@ async function main(): Promise<void> {
     ]);
     assert.deepEqual(t.map((r) => [r.itemNo, r.qty]), [['JT0', 1], ['JT1', 12]]);
   });
-  await test('submit schema: needs a UUID request id, whole positive quantities, bounded size', () => {
-    const good = { requestId: crypto.randomUUID(), lines: [{ itemNo: 'JT00011', qty: 10 }] };
+  await test('submit schema: branches send item numbers only (no quantities), bounded size', () => {
+    const good = { requestId: crypto.randomUUID(), itemNos: ['JT00011', 'jt00012'] };
     assert.ok(submitOrderSchema.safeParse(good).success);
     assert.ok(!submitOrderSchema.safeParse({ ...good, requestId: 'nope' }).success);
-    assert.ok(!submitOrderSchema.safeParse({ ...good, lines: [{ itemNo: 'JT1', qty: 0 }] }).success);
-    assert.ok(!submitOrderSchema.safeParse({ ...good, lines: [{ itemNo: 'JT1', qty: 1.5 }] }).success);
-    assert.ok(!submitOrderSchema.safeParse({ ...good, lines: [] }).success);
-    assert.ok(!submitOrderSchema.safeParse({ ...good, lines: [{ itemNo: '=cmd', qty: 1 }] }).success);
+    assert.ok(!submitOrderSchema.safeParse({ ...good, itemNos: [] }).success);
+    assert.ok(!submitOrderSchema.safeParse({ ...good, itemNos: ['=cmd'] }).success);
+    // a client that still sends quantities cannot influence them: the field is dropped
+    const parsed = submitOrderSchema.parse({ ...good, qty: 99999, lines: [{ itemNo: 'JT1', qty: 5 }] });
+    assert.deepEqual(Object.keys(parsed).sort(), ['itemNos', 'requestId']);
+  });
+  await test('quantities come from HQ standard quantities; items without one are not orderable', () => {
+    const orderable = new Map([['JT1', 24], ['JT2', 6]]);
+    const r = resolveQuantities(['jt1', 'JT1', 'JT2', 'ZZ9'], orderable);
+    assert.deepEqual(r.lines, [{ itemNo: 'JT1', qty: 24 }, { itemNo: 'JT2', qty: 6 }]); // duplicate pick counted once
+    assert.deepEqual(r.notOrderable, ['ZZ9']);
+  });
+  await test('branches never receive quantities; HQ still does', () => {
+    const now = new Date();
+    const o = {
+      _id: 'x', orderNo: 'O1', branchCode: 'J001', branchName: 'B', supplierCode: 'V1', supplierName: 'S', status: 'submitted',
+      lines: [{ itemNo: 'JT1', description: 'Milk', qty: 24 }], originalLines: [{ itemNo: 'JT1', description: 'Milk', qty: 30 }],
+      history: [], createdAt: now, updatedAt: now,
+    } as unknown as Parameters<typeof presentOrder>[0];
+    const b = presentOrder(o, { role: 'branch' });
+    assert.ok(!JSON.stringify(b).includes('qty') && !JSON.stringify(b).includes('totalQty'));
+    assert.equal(b.itemCount, 1);
+    const h = presentOrder(o, { role: 'hq' });
+    assert.equal(h.totalQty, 24);
+    assert.equal(h.lines[0]?.qty, 24);
+  });
+  await test('quantity import reader: accepts Branch/Item No./Qty headers in any sheet', async () => {
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Standard Qty');
+    ws.addRow(['Store Code', 'Item No.', 'Quantity']);
+    ws.addRow(['j001', 'JT00011', 2400]);
+    ws.addRow(['J002', 'jt00012', '12']);
+    const rows = await readTable(Buffer.from(await wb.xlsx.writeBuffer()), 'quantities');
+    assert.deepEqual(rows.map((r) => [r.branchCode, r.itemNo, r.qty]), [['j001', 'JT00011', '2400'], ['J002', 'jt00012', '12']]);
   });
   await test('import reader: finds headers in any sheet, cleans non-breaking spaces, skips unusable sheets', async () => {
     const wb = new ExcelJS.Workbook();

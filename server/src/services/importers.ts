@@ -1,7 +1,7 @@
 import ExcelJS from 'exceljs';
-import { Branch, Item, Supplier } from '../models/catalog';
+import { Branch, Item, Replenishment, Supplier } from '../models/catalog';
 
-export type ImportKind = 'suppliers' | 'items' | 'branches';
+export type ImportKind = 'suppliers' | 'items' | 'branches' | 'quantities';
 
 export interface ImportResult {
   kind: ImportKind;
@@ -21,6 +21,11 @@ const SYNONYMS: Record<ImportKind, Record<string, string[]>> = {
     supplierCode: ['supplierno', 'suppliercode', 'supplier', 'vendorno', 'vendorcode', 'vendor'],
   },
   branches: { code: ['code', 'no', 'branchcode', 'storecode'], name: ['name', 'branchname', 'store', 'storename'] },
+  quantities: {
+    branchCode: ['branchcode', 'storecode', 'branch', 'store', 'code', 'location', 'locationcode'],
+    itemNo: ['itemno', 'item', 'itemcode', 'sku'],
+    qty: ['qty', 'quantity', 'orderqty', 'orderquantity', 'replenishmentqty', 'standardqty', 'reorderqty'],
+  },
 };
 
 /** Read every sheet; a sheet counts if a header row (within its first 5 rows) has all required columns. */
@@ -60,6 +65,11 @@ export async function readTable(buffer: Buffer, kind: ImportKind): Promise<Recor
   return rows;
 }
 
+const defaultQtyOf = (r: Record<string, string>): { defaultQty?: number } => {
+  const n = Math.round(Number(r.defaultQty));
+  return Number.isFinite(n) && n >= 1 ? { defaultQty: n } : {};
+};
+
 const CODE = /^[A-Z0-9][A-Z0-9._-]{0,31}$/;
 
 export async function importRows(kind: ImportKind, rows: Record<string, string>[]): Promise<ImportResult> {
@@ -90,6 +100,42 @@ export async function importRows(kind: ImportKind, rows: Record<string, string>[
     return result;
   }
 
+  if (kind === 'quantities') {
+    const branches = new Set((await Branch.find({}, { code: 1 }).lean()).map((b) => b.code));
+    const itemSet = new Set((await Item.find({}, { itemNo: 1 }).lean()).map((i) => i.itemNo));
+    const ops: { updateOne: { filter: { branchCode: string; itemNo: string }; update: object; upsert: true } }[] = [];
+    const seen = new Set<string>();
+    for (const r of rows) {
+      const branchCode = (r.branchCode ?? '').toUpperCase();
+      const itemNo = (r.itemNo ?? '').toUpperCase();
+      const qty = Number((r.qty ?? '').replace(/,/g, ''));
+      if (!branches.has(branchCode)) {
+        fail(r._row ?? '?', `unknown branch "${branchCode}" (import branches first)`);
+        continue;
+      }
+      if (!itemSet.has(itemNo)) {
+        fail(r._row ?? '?', `unknown item "${itemNo}" (import products first)`);
+        continue;
+      }
+      if (!Number.isInteger(qty) || qty < 1 || qty > 100_000) {
+        fail(r._row ?? '?', `quantity must be a whole number from 1 to 100000 (got "${r.qty ?? ''}")`);
+        continue;
+      }
+      const key = `${branchCode}|${itemNo}`;
+      if (seen.has(key)) {
+        fail(r._row ?? '?', `duplicate ${branchCode} / ${itemNo} in file`);
+        continue;
+      }
+      seen.add(key);
+      ops.push({ updateOne: { filter: { branchCode, itemNo }, update: { $set: { qty, simulated: false }, $setOnInsert: { branchCode, itemNo } }, upsert: true } });
+    }
+    if (ops.length) {
+      const res = await Replenishment.bulkWrite(ops);
+      result.written = res.upsertedCount + res.matchedCount;
+    }
+    return result;
+  }
+
   const suppliers = new Set((await Supplier.find({}, { code: 1 }).lean()).map((s) => s.code));
   const ops: Parameters<typeof Item.bulkWrite>[0] = [];
   const seen = new Set<string>();
@@ -111,7 +157,7 @@ export async function importRows(kind: ImportKind, rows: Record<string, string>[
     }
     seen.add(itemNo);
     ops.push({
-      updateOne: { filter: { itemNo }, update: { $set: { description, supplierCode, active: true, simulated: false }, $setOnInsert: { itemNo } }, upsert: true },
+      updateOne: { filter: { itemNo }, update: { $set: { description, supplierCode, active: true, simulated: false, ...defaultQtyOf(r) }, $setOnInsert: { itemNo } }, upsert: true },
     });
   }
   if (ops.length) {

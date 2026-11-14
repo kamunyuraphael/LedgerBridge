@@ -1,5 +1,5 @@
 import { http } from './client'
-import type { AdminStats, AdminUser, ImportResult, Item, Line, Order, OrderFilters, Supplier, User } from './types'
+import type { AdminStats, AdminUser, ImportResult, Item, Order, OrderFilters, Supplier, User } from './types'
 
 export interface Health {
   status: 'ok' | 'degraded'
@@ -32,8 +32,9 @@ export const api = {
     return (await http.get<Item[]>('/api/catalogue/items', { params: { supplierCode } })).data
   },
 
-  async submitOrder(requestId: string, lines: { itemNo: string; qty: number }[], note: string) {
-    return (await http.post<{ orders: Order[] }>('/api/orders', { requestId, lines, ...(note ? { note } : {}) })).data.orders
+  // Branches pick products only; HQ's standard quantities are applied on the server.
+  async submitOrder(requestId: string, itemNos: string[], note: string) {
+    return (await http.post<{ orders: Order[] }>('/api/orders', { requestId, itemNos, ...(note ? { note } : {}) })).data.orders
   },
   async orders(filters: OrderFilters, skip = 0, limit = 25) {
     return (await http.get<{ total: number; orders: Order[] }>('/api/orders', { params: { ...clean(filters), skip, limit } })).data
@@ -42,12 +43,12 @@ export const api = {
     return (await http.get<Record<string, number>>('/api/orders/summary')).data
   },
   async lastLines(supplierCode: string) {
-    return (await http.get<{ lines: { itemNo: string; qty: number }[] }>(`/api/orders/template/${supplierCode}`)).data.lines
+    return (await http.get<{ itemNos: string[] }>(`/api/orders/template/${supplierCode}`)).data.itemNos
   },
   async transition(id: string, to: string, extra: { reason?: string; poNumber?: string } = {}) {
     return (await http.post<Order>(`/api/orders/${id}/transition`, { to, ...extra })).data
   },
-  async editLines(id: string, lines: Pick<Line, 'itemNo' | 'qty'>[]) {
+  async editLines(id: string, lines: { itemNo: string; qty: number }[]) {
     return (await http.patch<Order>(`/api/orders/${id}/lines`, { lines })).data
   },
   async setPo(id: string, poNumber: string) {
@@ -62,14 +63,14 @@ export const api = {
     return (await http.get<AdminStats>('/api/admin/stats')).data
   },
   async clearDemo() {
-    return (await http.post<{ orders: number; users: number; branches: number; items: number }>('/api/admin/demo/clear')).data
+    return (await http.post<{ orders: number; users: number; branches: number; items: number; rules: number }>('/api/admin/demo/clear')).data
   },
   async retryLedger() {
     return (await http.post<{ requeued: number }>('/api/admin/ledger/retry-failed')).data
   },
-  async importFile(kind: 'suppliers' | 'items' | 'branches', file: File, createAccounts: boolean) {
+  async importFile(kind: 'suppliers' | 'items' | 'branches' | 'quantities', file: File, flag: boolean) {
     const r = await http.post<ImportResult>(`/api/admin/import/${kind}`, await file.arrayBuffer(), {
-      params: kind === 'branches' && createAccounts ? { createAccounts: 'true' } : {},
+      params: kind === 'branches' && flag ? { createAccounts: 'true' } : kind === 'quantities' && flag ? { replace: 'true' } : {},
       headers: { 'Content-Type': 'application/octet-stream' },
       timeout: 120_000,
     })
@@ -77,6 +78,12 @@ export const api = {
   },
   async users() {
     return (await http.get<AdminUser[]>('/api/admin/users')).data
+  },
+  async branches() {
+    return (await http.get<{ code: string; name: string; active: boolean; hasLogin: boolean }[]>('/api/admin/branches')).data
+  },
+  async createUser(u: { username: string; name: string; role: 'branch' | 'hq'; branchCode?: string; password?: string }) {
+    return (await http.post<{ username: string; password: string }>('/api/admin/users', u)).data
   },
   async setUserActive(id: string, active: boolean) {
     await http.patch(`/api/admin/users/${id}`, { active })

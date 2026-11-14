@@ -108,3 +108,21 @@ export function totalsByItem(orders: readonly { lines: readonly OrderLine[] }[])
   }
   return [...m.values()].sort((a, b) => a.itemNo.localeCompare(b.itemNo));
 }
+
+/**
+ * Branches pick items only; HQ's standard quantities decide how much. Items with no known quantity for
+ * the branch are not orderable. Duplicate picks collapse to one line.
+ */
+export function resolveQuantities(
+  itemNos: readonly string[],
+  orderable: ReadonlyMap<string, number>,
+): { lines: QtyLine[]; notOrderable: string[] } {
+  const lines: QtyLine[] = [];
+  const notOrderable: string[] = [];
+  for (const no of new Set(itemNos.map((n) => n.trim().toUpperCase()))) {
+    const qty = orderable.get(no);
+    if (qty === undefined) notOrderable.push(no);
+    else lines.push({ itemNo: no, qty });
+  }
+  return { lines, notOrderable };
+}

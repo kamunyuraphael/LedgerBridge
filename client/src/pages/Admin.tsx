@@ -2,12 +2,17 @@ import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/api'
 import { errorMessage } from '../api/client'
 import type { AdminStats, AdminUser, ImportResult } from '../api/types'
-import { Button, Card, ErrorBanner, Notice } from '../components/ui'
+import { Button, Card, ErrorBanner, Notice, TextInput } from '../components/ui'
 import { fmtDate } from '../format'
 
 const KINDS = [
   { kind: 'suppliers', title: 'Suppliers', help: 'Columns: No. (V0001…) and Name.' },
   { kind: 'items', title: 'Products', help: 'Columns: Item No., Description, Supplier No. Import suppliers first.' },
+  {
+    kind: 'quantities',
+    title: 'Standard quantities',
+    help: 'Columns: Branch Code, Item No., Qty. This is what each branch can order and how much; branches never type quantities. Each branch only sees the items listed for it.',
+  },
   { kind: 'branches', title: 'Branches', help: 'Columns: Code (J001…) and Name. Can also create a login for each branch.' },
 ] as const
 
@@ -22,11 +27,11 @@ function downloadCsv(name: string, rows: string[][]) {
   URL.revokeObjectURL(url)
 }
 
-function ImportCard({ kind, title, help, onDone }: { kind: 'suppliers' | 'items' | 'branches'; title: string; help: string; onDone: () => void }) {
+function ImportCard({ kind, title, help, onDone }: { kind: 'suppliers' | 'items' | 'branches' | 'quantities'; title: string; help: string; onDone: () => void }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<ImportResult | null>(null)
-  const [accounts, setAccounts] = useState(true)
+  const [accounts, setAccounts] = useState(kind === 'branches')
 
   async function pick(file: File | undefined) {
     if (!file) return
@@ -52,6 +57,12 @@ function ImportCard({ kind, title, help, onDone }: { kind: 'suppliers' | 'items'
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={accounts} onChange={(e) => setAccounts(e.target.checked)} />
           Create a login per new branch (username = branch code)
+        </label>
+      )}
+      {kind === 'quantities' && (
+        <label className="flex items-start gap-2 text-sm">
+          <input type="checkbox" className="mt-1" checked={accounts} onChange={(e) => setAccounts(e.target.checked)} />
+          <span>Replace each listed branch's current list (items not in the file are removed from that branch)</span>
         </label>
       )}
       <label className={`inline-flex h-10 cursor-pointer items-center rounded-xl border border-[#d9ded9] bg-white px-4 text-sm font-semibold hover:bg-[#f3f5f1] ${busy ? 'opacity-50' : ''}`}>
@@ -90,6 +101,72 @@ function ImportCard({ kind, title, help, onDone }: { kind: 'suppliers' | 'items'
   )
 }
 
+function AddUser({ onDone }: { onDone: () => void }) {
+  const [branches, setBranches] = useState<{ code: string; name: string }[]>([])
+  const [name, setName] = useState('')
+  const [username, setUsername] = useState('')
+  const [role, setRole] = useState<'branch' | 'hq'>('branch')
+  const [branchCode, setBranchCode] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [created, setCreated] = useState<{ username: string; password: string } | null>(null)
+
+  useEffect(() => {
+    api.branches().then(setBranches).catch(() => undefined)
+  }, [])
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    setBusy(true)
+    setError(null)
+    setCreated(null)
+    try {
+      setCreated(await api.createUser({ name: name.trim(), username: username.trim(), role, ...(role === 'branch' ? { branchCode } : {}) }))
+      setName('')
+      setUsername('')
+      onDone()
+    } catch (err) {
+      setError(errorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const ok = name.trim() && username.trim().length >= 3 && (role === 'hq' || branchCode)
+  return (
+    <form onSubmit={submit} className="space-y-3 rounded-2xl bg-[#f6f8f6] p-4">
+      <h4 className="text-sm font-semibold">Add a user</h4>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <TextInput placeholder="Full name (e.g. Eric Kerosi)" value={name} onChange={(e) => setName(e.target.value)} />
+        <TextInput placeholder="Username (e.g. eric.thindigua)" autoCapitalize="none" value={username} onChange={(e) => setUsername(e.target.value)} />
+        <select aria-label="Role" value={role} onChange={(e) => setRole(e.target.value as 'branch' | 'hq')} className="h-10 rounded-xl border border-[#d9ded9] bg-white px-3 text-sm">
+          <option value="branch">Branch (places orders)</option>
+          <option value="hq">HQ (approves orders)</option>
+        </select>
+        {role === 'branch' && (
+          <select aria-label="Branch" value={branchCode} onChange={(e) => setBranchCode(e.target.value)} className="h-10 min-w-0 rounded-xl border border-[#d9ded9] bg-white px-3 text-sm">
+            <option value="">Choose branch…</option>
+            {branches.map((b) => (
+              <option key={b.code} value={b.code}>
+                {b.code} · {b.name}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+      {error && <ErrorBanner>{error}</ErrorBanner>}
+      {created && (
+        <Notice>
+          Created <strong>{created.username}</strong>. Temporary password: <code className="font-semibold">{created.password}</code> (shown once; they must change it at first sign-in)
+        </Notice>
+      )}
+      <Button type="submit" disabled={busy || !ok}>
+        {busy ? 'Creating…' : 'Create user'}
+      </Button>
+    </form>
+  )
+}
+
 export function Admin() {
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [users, setUsers] = useState<AdminUser[]>([])
@@ -115,7 +192,7 @@ export function Admin() {
     if (!window.confirm('Delete all simulated branches, products, demo logins and their orders? Real data is not touched.')) return
     try {
       const r = await api.clearDemo()
-      setDemoMsg(`Removed ${r.branches} branches, ${r.items} products, ${r.users} logins and ${r.orders} orders.`)
+      setDemoMsg(`Removed ${r.branches} branches, ${r.items} products, ${r.rules} standard quantities, ${r.users} logins and ${r.orders} orders.`)
       refresh()
     } catch (e) {
       setError(errorMessage(e))
@@ -173,7 +250,7 @@ export function Admin() {
           </Button>
         </Card>
       )}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         {KINDS.map((k) => (
           <ImportCard key={k.kind} {...k} onDone={refresh} />
         ))}
@@ -181,6 +258,7 @@ export function Admin() {
 
       <Card className="space-y-3">
         <h3 className="font-display text-base font-bold text-[#064e3b]">Accounts</h3>
+        <AddUser onDone={refresh} />
         {reset && (
           <Notice>
             New temporary password for <strong>{reset.username}</strong>: <code className="font-semibold">{reset.password}</code> (shown once)

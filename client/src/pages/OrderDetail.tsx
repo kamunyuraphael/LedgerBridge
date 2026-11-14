@@ -49,7 +49,7 @@ export function OrderDetail({ id, onClose, onChanged }: { id: string; onClose: (
 
   function startEdit() {
     if (!order) return
-    setQtys(Object.fromEntries(order.lines.map((l) => [l.itemNo, String(l.qty)])))
+    setQtys(Object.fromEntries(order.lines.map((l) => [l.itemNo, String(l.qty ?? '')])))
     setEditing(true)
   }
   const edited = order
@@ -106,7 +106,7 @@ export function OrderDetail({ id, onClose, onChanged }: { id: string; onClose: (
               <thead className="text-left text-xs text-[#5b645e]">
                 <tr>
                   <th className="py-2 font-semibold">Item</th>
-                  <th className="py-2 text-right font-semibold">Qty</th>
+                  {isHq && <th className="py-2 text-right font-semibold">Qty</th>}
                 </tr>
               </thead>
               <tbody>
@@ -118,7 +118,7 @@ export function OrderDetail({ id, onClose, onChanged }: { id: string; onClose: (
                         <div>{l.description}</div>
                         <div className="text-xs text-[#758078]">{l.itemNo}</div>
                       </td>
-                      <td className="py-2 text-right">
+                      {isHq && <td className="py-2 text-right">
                         {editing ? (
                           <input
                             inputMode="numeric"
@@ -129,11 +129,11 @@ export function OrderDetail({ id, onClose, onChanged }: { id: string; onClose: (
                           />
                         ) : (
                           <>
-                            <span className="font-semibold">{nf.format(l.qty)}</span>
+                            <span className="font-semibold">{nf.format(l.qty ?? 0)}</span>
                             {was !== undefined && was !== l.qty && <div className="text-xs text-[#aa3e35]">asked {nf.format(was)}</div>}
                           </>
                         )}
-                      </td>
+                      </td>}
                     </tr>
                   )
                 })}
@@ -142,7 +142,7 @@ export function OrderDetail({ id, onClose, onChanged }: { id: string; onClose: (
                   .map((x) => (
                     <tr key={x.itemNo} className="border-t border-[#eef1ee] text-[#aa3e35] line-through">
                       <td className="py-2 pr-2">{x.description}</td>
-                      <td className="py-2 text-right">{nf.format(x.qty)}</td>
+                      {isHq && <td className="py-2 text-right">{nf.format(x.qty ?? 0)}</td>}
                     </tr>
                   ))}
               </tbody>
