@@ -4,7 +4,7 @@ import { errorMessage } from '../api/client'
 import type { Order, OrderFilters, OrderStatus, Supplier } from '../api/types'
 import { useAuth } from '../authContext'
 import { Button, Card, ErrorBanner, StatusBadge, TextInput } from '../components/ui'
-import { STATUS_LABEL, fmtDate, nf } from '../format'
+import { STATUS_LABEL, fmtDate } from '../format'
 import { OrderDetail } from './OrderDetail'
 
 const TABS: (OrderStatus | '')[] = ['submitted', 'approved', 'sent', 'fulfilled', 'rejected', 'cancelled', '']
@@ -63,7 +63,7 @@ export function Orders() {
   }, [isHq, load, status, supplierCode, q, from, to])
 
   useEffect(() => {
-    if (isHq) api.suppliers(true).then(setSuppliers).catch(() => undefined)
+    if (isHq) api.suppliers().then(setSuppliers).catch(() => undefined)
   }, [isHq])
 
   function applyUpdate(o: Order) {
@@ -142,13 +142,12 @@ export function Orders() {
 
       <Card className="overflow-hidden p-0">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[40rem] text-sm">
+          <table className="w-full min-w-[34rem] text-sm">
             <thead className="bg-[#f6f8f6] text-left text-xs text-[#5b645e]">
               <tr>
                 <th className="px-4 py-3 font-semibold">Order</th>
                 {isHq && <th className="px-4 py-3 font-semibold">Branch</th>}
                 <th className="px-4 py-3 font-semibold">Supplier</th>
-                <th className="px-4 py-3 text-right font-semibold">{isHq ? 'Items / Qty' : 'Items'}</th>
                 <th className="px-4 py-3 font-semibold">PO no.</th>
                 <th className="px-4 py-3 font-semibold">Status</th>
               </tr>
@@ -162,9 +161,6 @@ export function Orders() {
                   </td>
                   {isHq && <td className="px-4 py-3">{o.branchName}</td>}
                   <td className="px-4 py-3">{o.supplierName}</td>
-                  <td className="px-4 py-3 text-right">
-                    {isHq ? `${o.itemCount} / ${nf.format(o.totalQty ?? 0)}` : o.itemCount}
-                  </td>
                   <td className="px-4 py-3">{o.poNumber ?? <span className="text-[#a7aea9]">—</span>}</td>
                   <td className="px-4 py-3">
                     <StatusBadge status={o.status} />
@@ -173,7 +169,7 @@ export function Orders() {
               ))}
               {!loading && orders.length === 0 && (
                 <tr>
-                  <td colSpan={isHq ? 6 : 5} className="px-4 py-10 text-center text-[#758078]">
+                  <td colSpan={isHq ? 5 : 4} className="px-4 py-10 text-center text-[#758078]">
                     No orders here yet.
                   </td>
                 </tr>

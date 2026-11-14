@@ -1,7 +1,7 @@
 import { Order } from '../models/Order';
 import { GraphError } from './graph/types';
 import { orderTabFor, type OrderLedgerRow, type OrderLedgerSink } from './orderLedger';
-import type { OrderLine, OrderStatus } from './orderLogic';
+import type { OrderStatus } from './orderLogic';
 import { logger } from '../utils/logger';
 
 export interface LedgerJob extends OrderLedgerRow {
@@ -51,7 +51,6 @@ export class MongoOrderLedgerStore implements OrderLedgerStore {
       branchName: d.branchName,
       supplierName: d.supplierName,
       status: d.status as OrderStatus,
-      lines: (d.lines as unknown as OrderLine[]).map((l) => ({ itemNo: l.itemNo, description: l.description, qty: l.qty })),
     };
   }
 

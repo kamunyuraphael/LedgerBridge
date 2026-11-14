@@ -7,12 +7,6 @@ import { fmtDate } from '../format'
 
 const KINDS = [
   { kind: 'suppliers', title: 'Suppliers', help: 'Columns: No. (V0001…) and Name.' },
-  { kind: 'items', title: 'Products', help: 'Columns: Item No., Description, Supplier No. Import suppliers first.' },
-  {
-    kind: 'quantities',
-    title: 'Standard quantities',
-    help: 'Columns: Branch Code, Item No., Qty. This is what each branch can order and how much; branches never type quantities. Each branch only sees the items listed for it.',
-  },
   { kind: 'branches', title: 'Branches', help: 'Columns: Code (J001…) and Name. Can also create a login for each branch.' },
 ] as const
 
@@ -27,7 +21,7 @@ function downloadCsv(name: string, rows: string[][]) {
   URL.revokeObjectURL(url)
 }
 
-function ImportCard({ kind, title, help, onDone }: { kind: 'suppliers' | 'items' | 'branches' | 'quantities'; title: string; help: string; onDone: () => void }) {
+function ImportCard({ kind, title, help, onDone }: { kind: 'suppliers' | 'branches'; title: string; help: string; onDone: () => void }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<ImportResult | null>(null)
@@ -57,12 +51,6 @@ function ImportCard({ kind, title, help, onDone }: { kind: 'suppliers' | 'items'
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={accounts} onChange={(e) => setAccounts(e.target.checked)} />
           Create a login per new branch (username = branch code)
-        </label>
-      )}
-      {kind === 'quantities' && (
-        <label className="flex items-start gap-2 text-sm">
-          <input type="checkbox" className="mt-1" checked={accounts} onChange={(e) => setAccounts(e.target.checked)} />
-          <span>Replace each listed branch's current list (items not in the file are removed from that branch)</span>
         </label>
       )}
       <label className={`inline-flex h-10 cursor-pointer items-center rounded-xl border border-[#d9ded9] bg-white px-4 text-sm font-semibold hover:bg-[#f3f5f1] ${busy ? 'opacity-50' : ''}`}>
@@ -189,10 +177,10 @@ export function Admin() {
     }
   }
   async function clearDemo() {
-    if (!window.confirm('Delete all simulated branches, products, demo logins and their orders? Real data is not touched.')) return
+    if (!window.confirm('Delete all simulated branches, demo logins and their orders? Real data is not touched.')) return
     try {
       const r = await api.clearDemo()
-      setDemoMsg(`Removed ${r.branches} branches, ${r.items} products, ${r.rules} standard quantities, ${r.users} logins and ${r.orders} orders.`)
+      setDemoMsg(`Removed ${r.branches} branches, ${r.users} logins and ${r.orders} orders.`)
       refresh()
     } catch (e) {
       setError(errorMessage(e))
@@ -219,11 +207,11 @@ export function Admin() {
     <div className="space-y-5">
       {error && <ErrorBanner>{error}</ErrorBanner>}
       {stats && (
-        <div className="grid grid-cols-3 gap-3 text-center">
-          {(['suppliers', 'items', 'branches'] as const).map((k) => (
+        <div className="grid grid-cols-2 gap-3 text-center">
+          {(['suppliers', 'branches'] as const).map((k) => (
             <Card key={k}>
               <div className="font-display text-2xl font-bold text-[#064e3b]">{stats[k]}</div>
-              <div className="text-xs capitalize text-[#758078]">{k === 'items' ? 'products' : k}</div>
+              <div className="text-xs capitalize text-[#758078]">{k}</div>
             </Card>
           ))}
         </div>
@@ -232,7 +220,7 @@ export function Admin() {
       {stats?.hasDemoData && (
         <Card className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-[#354139]">
-            <strong>Simulated data is loaded.</strong> Branches J001 to J034 and demo products are for testing; the demo branch logins are j001 to j034
+            <strong>Simulated data is loaded.</strong> Branches J001 to J034 are for testing; the demo branch logins are j001 to j034
             (password demo1234). Remove them before going live.
           </p>
           <Button variant="danger" onClick={() => void clearDemo()}>

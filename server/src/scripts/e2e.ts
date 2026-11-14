@@ -15,7 +15,7 @@ import { decrypt, encrypt } from '../utils/crypto';
 import { readTable } from '../services/importers';
 import { presentOrder } from '../services/orderService';
 import {
-  applyLineEdits, canTransition, groupBySupplier, mergeLines, normalizePo, resolveQuantities, totalsByItem, type CatalogItem,
+  canTransition, normalizePo, uniqueSupplierCodes,
 } from '../services/orderLogic';
 import { submitOrderSchema } from '../schemas/order';
 import { GoogleSheetsOrderLedger, ORDER_HEADER, orderTabFor, type OrderLedgerRow } from '../services/orderLedger';
@@ -429,36 +429,36 @@ async function main(): Promise<void> {
   console.log('\nOrder ledger (approved orders -> sheet)');
   const baseOrder = (over: Partial<OrderLedgerRow> = {}): OrderLedgerRow => ({
     orderNo: 'ORD-20261113-0001', approvedAt: new Date('2026-11-13T09:30:00Z'), branchName: 'Thindigua', supplierName: 'Brookside Dairy Ltd.',
-    status: 'approved', lines: [{ itemNo: 'JT00011', description: 'Milk 500Ml', qty: 2400 }, { itemNo: 'JT00017', description: '=Ghee 1Kg', qty: 6 }], ...over,
+    status: 'approved', ...over,
   });
   await test('tab name follows approval month in Nairobi time', () => {
     assert.equal(orderTabFor('Orders', new Date('2026-11-13T09:30:00Z')), 'Orders_2026-11');
     assert.equal(orderTabFor('Orders', new Date('2026-11-30T21:30:00Z')), 'Orders_2026-12'); // 00:30 on 1 Dec in Nairobi
   });
-  await test('first sync creates the tab with the order header and appends one row per line', async () => {
+  await test('first sync creates the tab with the order header and appends one row for the order', async () => {
     const api = new MemorySheets(); const sink = new GoogleSheetsOrderLedger(api);
-    const r = await sink.sync('Orders_2026-11', baseOrder());
-    assert.deepEqual(r, { created: true, added: 2, updated: 0 });
+    const r = await sink.sync('Orders_2026-11', baseOrder({ supplierName: '=Brookside' }));
+    assert.deepEqual(r, { created: true, added: 1, updated: 0 });
     const t = api.tabs.get('Orders_2026-11')!;
     assert.deepEqual(t.header, ORDER_HEADER);
     assert.ok(t.formatted);
-    assert.equal(t.rows.length, 2);
+    assert.equal(t.rows.length, 1);
     assert.deepEqual(t.rows[0]!.slice(1, 3), ['ORD-20261113-0001', '']);
-    assert.equal(t.rows[0]![9], 'ORD-20261113-0001:JT00011');
-    assert.equal(t.rows[1]![6], '=Ghee 1Kg'); // kept as literal text
+    assert.equal(t.rows[0]![6], 'ORD-20261113-0001'); // hidden Record ID
+    assert.equal(t.rows[0]![4], '=Brookside'); // kept as literal text
     // 09:30 UTC is 12:30 in Nairobi
     assert.ok(Math.abs((t.rows[0]![0] as number) % 1 - 12.5 / 24) < 1e-6);
   });
-  await test('re-sync never duplicates rows; PO number and status are refreshed in place', async () => {
+  await test('re-sync never duplicates the row; PO number and status are refreshed in place', async () => {
     const api = new MemorySheets(); const sink = new GoogleSheetsOrderLedger(api);
     await sink.sync('T', baseOrder());
     const r = await sink.sync('T', baseOrder({ poNumber: 'PO12345', status: 'sent' }));
-    assert.deepEqual(r, { created: false, added: 0, updated: 2 });
+    assert.deepEqual(r, { created: false, added: 0, updated: 1 });
     const rows = api.tabs.get('T')!.rows;
-    assert.equal(rows.length, 2);
-    assert.ok(rows.every((x) => x[2] === 'PO12345' && x[8] === 'Sent to supplier'));
+    assert.equal(rows.length, 1);
+    assert.ok(rows.every((x) => x[2] === 'PO12345' && x[5] === 'Sent to supplier'));
     await sink.sync('T', baseOrder({ poNumber: 'PO12345', status: 'cancelled' }));
-    assert.ok(rows.every((x) => x[8] === 'Cancelled'));
+    assert.ok(rows.every((x) => x[5] === 'Cancelled'));
   });
   await test('two orders in one tab stay separate', async () => {
     const api = new MemorySheets(); const sink = new GoogleSheetsOrderLedger(api);
@@ -466,8 +466,8 @@ async function main(): Promise<void> {
     await sink.sync('T', baseOrder({ orderNo: 'ORD-20261113-0002', branchName: 'Ruaka' }));
     await sink.sync('T', baseOrder({ poNumber: 'PO9' }));
     const rows = api.tabs.get('T')!.rows;
-    assert.equal(rows.length, 4);
-    assert.deepEqual(rows.map((r) => r[2]), ['PO9', 'PO9', '', '']);
+    assert.equal(rows.length, 2);
+    assert.deepEqual(rows.map((r) => r[2]), ['PO9', '']);
   });
 
   class MemoryOrderStore implements OrderLedgerStore {
@@ -489,12 +489,12 @@ async function main(): Promise<void> {
     const w = new OrderLedgerWorker(store, new GoogleSheetsOrderLedger(api), opts);
     store.add('1'); store.add('2', { branchName: 'Ruaka' });
     await w.drain();
-    assert.equal(api.tabs.get('Orders_2026-11')!.rows.length, 4);
+    assert.equal(api.tabs.get('Orders_2026-11')!.rows.length, 2);
     store.requeue('1', { poNumber: 'PO77', status: 'sent' });
     await w.drain();
     const rows = api.tabs.get('Orders_2026-11')!.rows;
-    assert.equal(rows.length, 4);
-    assert.equal(rows.filter((r) => r[2] === 'PO77').length, 2);
+    assert.equal(rows.length, 2);
+    assert.equal(rows.filter((r) => r[2] === 'PO77').length, 1);
   });
   await test('worker retries transient Sheets errors with backoff and succeeds after recovery', async () => {
     const api = new MemorySheets(); const store = new MemoryOrderStore();
@@ -508,7 +508,7 @@ async function main(): Promise<void> {
     down = false; store.jobs.get('1')!.next = new Date(0);
     await w.drain();
     assert.equal(store.jobs.get('1')!.state, 'synced');
-    assert.equal(api.tabs.get('Orders_2026-11')!.rows.length, 2);
+    assert.equal(api.tabs.get('Orders_2026-11')!.rows.length, 1);
   });
   await test('worker gives up on permanent errors and after max attempts; a change during sync keeps it queued', async () => {
     const store = new MemoryOrderStore();
@@ -527,19 +527,6 @@ async function main(): Promise<void> {
   });
 
   console.log('\nOrders: pure rules');
-  const cat = new Map<string, CatalogItem>([
-    ['JT1', { itemNo: 'JT1', description: 'Milk', supplierCode: 'V0002' }],
-    ['JT2', { itemNo: 'JT2', description: 'Ghee', supplierCode: 'V0002' }],
-    ['JT3', { itemNo: 'JT3', description: 'Bread', supplierCode: 'V0017' }],
-  ]);
-  await test('basket splits into one group per supplier, merges duplicates, reports unknown items', () => {
-    const { groups, unknown } = groupBySupplier(
-      [{ itemNo: 'jt1', qty: 2 }, { itemNo: 'JT1', qty: 3 }, { itemNo: 'JT3', qty: 1 }, { itemNo: 'JT2', qty: 4 }, { itemNo: 'ZZ9', qty: 1 }], cat);
-    assert.deepEqual([...groups.keys()].sort(), ['V0002', 'V0017']);
-    assert.deepEqual(groups.get('V0002')!.map((l) => [l.itemNo, l.qty]), [['JT1', 5], ['JT2', 4]]);
-    assert.deepEqual(unknown, ['ZZ9']);
-    assert.deepEqual(mergeLines([{ itemNo: ' a ', qty: 1 }, { itemNo: 'A', qty: 2 }]), [{ itemNo: 'A', qty: 3 }]);
-  });
   await test('status transitions: HQ follows the lifecycle, branch may only cancel a submitted order', () => {
     assert.ok(canTransition('submitted', 'approved', 'hq'));
     assert.ok(canTransition('approved', 'sent', 'hq'));
@@ -551,78 +538,48 @@ async function main(): Promise<void> {
     assert.ok(!canTransition('approved', 'cancelled', 'branch'));
     assert.ok(!canTransition('submitted', 'approved', 'branch'));
   });
-  await test('HQ edits: only lines already on the order, at least one must remain', () => {
-    const cur = [{ itemNo: 'JT1', description: 'Milk', qty: 5 }, { itemNo: 'JT2', description: 'Ghee', qty: 4 }];
-    const ok = applyLineEdits(cur, [{ itemNo: 'JT1', qty: 2 }]);
-    assert.ok(ok.ok && ok.lines.length === 1 && ok.lines[0]!.qty === 2 && ok.lines[0]!.description === 'Milk');
-    assert.ok(!applyLineEdits(cur, [{ itemNo: 'JT9', qty: 1 }]).ok);
-    assert.ok(!applyLineEdits(cur, []).ok);
-  });
-  await test('PO numbers are normalised and validated; totals aggregate per item across branches', () => {
+  await test('PO numbers are normalised and validated', () => {
     assert.equal(normalizePo(' po 123/26 '), 'PO123/26');
     assert.equal(normalizePo('x'), null);
     assert.equal(normalizePo('bad!chars'), null);
-    const t = totalsByItem([
-      { lines: [{ itemNo: 'JT1', description: 'Milk', qty: 5 }] },
-      { lines: [{ itemNo: 'JT1', description: 'Milk', qty: 7 }, { itemNo: 'JT0', description: 'Cream', qty: 1 }] },
-    ]);
-    assert.deepEqual(t.map((r) => [r.itemNo, r.qty]), [['JT0', 1], ['JT1', 12]]);
   });
-  await test('submit schema: branches send item numbers only (no quantities), bounded size', () => {
-    const good = { requestId: crypto.randomUUID(), itemNos: ['JT00011', 'jt00012'] };
+  await test('supplier codes are trimmed, upper-cased and de-duplicated in order', () => {
+    assert.deepEqual(uniqueSupplierCodes([' v0002', 'V0002', 'v0017', '']), ['V0002', 'V0017']);
+  });
+  await test('submit schema: branches send supplier codes only (no products or quantities), bounded size', () => {
+    const good = { requestId: crypto.randomUUID(), supplierCodes: ['V0002', 'v0017'] };
     assert.ok(submitOrderSchema.safeParse(good).success);
     assert.ok(!submitOrderSchema.safeParse({ ...good, requestId: 'nope' }).success);
-    assert.ok(!submitOrderSchema.safeParse({ ...good, itemNos: [] }).success);
-    assert.ok(!submitOrderSchema.safeParse({ ...good, itemNos: ['=cmd'] }).success);
-    // a client that still sends quantities cannot influence them: the field is dropped
-    const parsed = submitOrderSchema.parse({ ...good, qty: 99999, lines: [{ itemNo: 'JT1', qty: 5 }] });
-    assert.deepEqual(Object.keys(parsed).sort(), ['itemNos', 'requestId']);
+    assert.ok(!submitOrderSchema.safeParse({ ...good, supplierCodes: [] }).success);
+    assert.ok(!submitOrderSchema.safeParse({ ...good, supplierCodes: ['=cmd'] }).success);
+    assert.ok(!submitOrderSchema.safeParse({ ...good, supplierCodes: Array.from({ length: 61 }, (_, i) => `V${i}`) }).success);
+    // products and quantities are HQ's business: anything extra is dropped
+    const parsed = submitOrderSchema.parse({ ...good, qty: 99999, itemNos: ['JT1'], lines: [{ itemNo: 'JT1', qty: 5 }] });
+    assert.deepEqual(Object.keys(parsed).sort(), ['requestId', 'supplierCodes']);
   });
-  await test('quantities come from HQ standard quantities; items without one are not orderable', () => {
-    const orderable = new Map([['JT1', 24], ['JT2', 6]]);
-    const r = resolveQuantities(['jt1', 'JT1', 'JT2', 'ZZ9'], orderable);
-    assert.deepEqual(r.lines, [{ itemNo: 'JT1', qty: 24 }, { itemNo: 'JT2', qty: 6 }]); // duplicate pick counted once
-    assert.deepEqual(r.notOrderable, ['ZZ9']);
-  });
-  await test('branches never receive quantities; HQ still does', () => {
+  await test('an order carries no products or quantities', () => {
     const now = new Date();
     const o = {
       _id: 'x', orderNo: 'O1', branchCode: 'J001', branchName: 'B', supplierCode: 'V1', supplierName: 'S', status: 'submitted',
-      lines: [{ itemNo: 'JT1', description: 'Milk', qty: 24 }], originalLines: [{ itemNo: 'JT1', description: 'Milk', qty: 30 }],
       history: [], createdAt: now, updatedAt: now,
     } as unknown as Parameters<typeof presentOrder>[0];
-    const b = presentOrder(o, { role: 'branch' });
-    assert.ok(!JSON.stringify(b).includes('qty') && !JSON.stringify(b).includes('totalQty'));
-    assert.equal(b.itemCount, 1);
-    const h = presentOrder(o, { role: 'hq' });
-    assert.equal(h.totalQty, 24);
-    assert.equal(h.lines[0]?.qty, 24);
-  });
-  await test('quantity import reader: accepts Branch/Item No./Qty headers in any sheet', async () => {
-    const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet('Standard Qty');
-    ws.addRow(['Store Code', 'Item No.', 'Quantity']);
-    ws.addRow(['j001', 'JT00011', 2400]);
-    ws.addRow(['J002', 'jt00012', '12']);
-    const rows = await readTable(Buffer.from(await wb.xlsx.writeBuffer()), 'quantities');
-    assert.deepEqual(rows.map((r) => [r.branchCode, r.itemNo, r.qty]), [['j001', 'JT00011', '2400'], ['J002', 'jt00012', '12']]);
+    const j = JSON.stringify(presentOrder(o));
+    assert.ok(!/qty|lines|itemNo/i.test(j));
   });
   await test('import reader: finds headers in any sheet, cleans non-breaking spaces, skips unusable sheets', async () => {
     const wb = new ExcelJS.Workbook();
-    const a = wb.addWorksheet('BROOKSIDE');
-    a.addRow(['CODE', 'Description', 'QTY']);
-    const b = wb.addWorksheet('Items');
-    b.addRow(['Item No.', 'Description', 'Supplier No.']);
-    b.addRow(['jt00011', 'Brookside\u00a0Dairybest\u00a0Milk\u00a0500Ml', 'v0002']);
+    const junk = wb.addWorksheet('Notes');
+    junk.addRow(['Hello', 'World']);
+    const b = wb.addWorksheet('Vendors');
+    b.addRow(['No.', 'Name']);
+    b.addRow(['v0002', 'Brookside\u00a0Dairy\u00a0Ltd']);
     b.addRow([]);
-    b.addRow(['JT00012', 'Fresh  Milk', 'V0002']);
-    const nohead = wb.addWorksheet('DPL');
-    nohead.addRow(['JT00658', 'Festive Milky White Bread 400Gm', 10]);
-    const rows = await readTable(Buffer.from(await wb.xlsx.writeBuffer()), 'items');
+    b.addRow(['V0017', 'Jaza  Bakery']);
+    const rows = await readTable(Buffer.from(await wb.xlsx.writeBuffer()), 'suppliers');
     assert.equal(rows.length, 2);
-    assert.equal(rows[0]!.description, 'Brookside Dairybest Milk 500Ml');
-    assert.equal(rows[1]!.description, 'Fresh Milk');
-    assert.equal(rows[0]!.supplierCode, 'v0002');
+    assert.equal(rows[0]!.name, 'Brookside Dairy Ltd');
+    assert.equal(rows[1]!.name, 'Jaza Bakery');
+    assert.equal(rows[0]!.code, 'v0002');
   });
 
   console.log('\nHTTP layer (no database required)');

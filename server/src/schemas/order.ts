@@ -1,31 +1,28 @@
 import { z } from 'zod';
 
-export const MAX_QTY = 100_000;
-export const MAX_LINES = 300;
+export const MAX_SUPPLIERS = 60;
 
-const itemNo = z
+const supplierCode = z
   .string()
   .trim()
   .min(1)
-  .max(32)
-  .regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/, 'Invalid item number');
-const qty = z.number().int().min(1).max(MAX_QTY);
+  .max(20)
+  .regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/, 'Invalid supplier code');
 
-/** Branches choose items only. Quantities come from HQ's standard quantities on the server. */
+/**
+ * Branches choose suppliers only. Which products and how much is decided by HQ's own system, so the
+ * request carries no items or quantities (any extra fields are dropped).
+ */
 export const submitOrderSchema = z.object({
   requestId: z.uuid(),
   note: z.string().trim().max(500).optional(),
-  itemNos: z.array(itemNo).min(1).max(MAX_LINES),
+  supplierCodes: z.array(supplierCode).min(1).max(MAX_SUPPLIERS),
 });
 
 export const transitionSchema = z.object({
   to: z.enum(['approved', 'rejected', 'sent', 'fulfilled', 'cancelled']),
   reason: z.string().trim().max(500).optional(),
   poNumber: z.string().max(60).optional(),
-});
-
-export const editLinesSchema = z.object({
-  lines: z.array(z.object({ itemNo, qty })).min(1).max(MAX_LINES),
 });
 
 export const poSchema = z.object({ poNumber: z.string().max(60) });

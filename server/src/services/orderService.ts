@@ -1,18 +1,6 @@
-import { Item, Supplier, Branch } from '../models/catalog';
-import { orderableFor } from './replenishment';
+import { Supplier, Branch } from '../models/catalog';
 import { Counter, Order } from '../models/Order';
-import {
-  applyLineEdits,
-  canTransition,
-  groupBySupplier,
-  resolveQuantities,
-  normalizePo,
-  type CatalogItem,
-  type OrderLine,
-  type OrderStatus,
-  type QtyLine,
-  type Role,
-} from './orderLogic';
+import { canTransition, normalizePo, uniqueSupplierCodes, type OrderStatus, type Role } from './orderLogic';
 import type { AuthUser } from './auth';
 
 export class HttpError extends Error {
@@ -46,8 +34,6 @@ type Lean = {
   branchName: string;
   supplierCode: string;
   supplierName: string;
-  lines: OrderLine[];
-  originalLines?: OrderLine[] | null;
   status: OrderStatus;
   note?: string | null;
   rejectionReason?: string | null;
@@ -60,12 +46,7 @@ type Lean = {
   updatedAt: Date;
 };
 
-/**
- * Quantities are HQ-only: branches order by product name and never see amounts.
- * Anything but an explicit HQ viewer gets the quantity-free shape.
- */
-export function presentOrder(o: Lean, viewer?: Pick<AuthUser, 'role'>) {
-  const showQty = !viewer || viewer.role === 'hq';
+export function presentOrder(o: Lean) {
   return {
     id: String(o._id),
     orderNo: o.orderNo,
@@ -74,10 +55,6 @@ export function presentOrder(o: Lean, viewer?: Pick<AuthUser, 'role'>) {
     supplierCode: o.supplierCode,
     supplierName: o.supplierName,
     status: o.status,
-    lines: o.lines.map((l) => (showQty ? { itemNo: l.itemNo, description: l.description, qty: l.qty } : { itemNo: l.itemNo, description: l.description })),
-    originalLines: showQty ? o.originalLines?.map((l) => ({ itemNo: l.itemNo, description: l.description, qty: l.qty })) : undefined,
-    itemCount: o.lines.length,
-    totalQty: showQty ? o.lines.reduce((n, l) => n + l.qty, 0) : undefined,
     note: o.note ?? undefined,
     rejectionReason: o.rejectionReason ?? undefined,
     poNumber: o.poNumber ?? undefined,
@@ -90,30 +67,27 @@ export function presentOrder(o: Lean, viewer?: Pick<AuthUser, 'role'>) {
   };
 }
 
-/** One basket in, one order per supplier out. Safe to retry with the same requestId. */
-export async function submitOrder(user: AuthUser, input: { requestId: string; note?: string | undefined; itemNos: string[] }) {
+/**
+ * A branch ticks suppliers; each becomes one order for HQ to approve. Products and quantities are decided
+ * by HQ's own system, so none are stored here. Safe to retry with the same requestId.
+ */
+export async function submitOrder(user: AuthUser, input: { requestId: string; note?: string | undefined; supplierCodes: string[] }) {
   if (user.role !== 'branch' || !user.branchCode) throw new HttpError(403, 'forbidden', 'Only branch accounts can place orders');
   const branch = await Branch.findOne({ code: user.branchCode, active: true }).lean();
   if (!branch) throw new HttpError(403, 'branch_inactive', 'Your branch is not active');
 
-  // The branch only picks items; quantities are HQ's standard quantities for this branch.
-  const { lines: picked, notOrderable } = resolveQuantities(input.itemNos, await orderableFor(branch.code));
-  if (notOrderable.length) {
-    throw new HttpError(422, 'not_orderable', `These items are not set up for your branch: ${notOrderable.join(', ')}`);
-  }
-  const found = await Item.find({ itemNo: { $in: picked.map((l) => l.itemNo) }, active: true }).lean();
-  const catalog = new Map<string, CatalogItem>(found.map((i) => [i.itemNo, i]));
-  const { groups, unknown } = groupBySupplier(picked, catalog);
-  if (unknown.length) throw new HttpError(422, 'unknown_items', `Unknown or inactive items: ${unknown.join(', ')}`);
-
-  const suppliers = await Supplier.find({ code: { $in: [...groups.keys()] } }).lean();
+  const codes = uniqueSupplierCodes(input.supplierCodes);
+  const suppliers = await Supplier.find({ code: { $in: codes }, active: true }).lean();
   const supplierName = new Map(suppliers.map((s) => [s.code, s.name]));
+  const unknown = codes.filter((c) => !supplierName.has(c));
+  if (unknown.length) throw new HttpError(422, 'unknown_suppliers', `Unknown or inactive suppliers: ${unknown.join(', ')}`);
+
   const now = new Date();
   const out = [];
-  for (const [supplierCode, lines] of groups) {
+  for (const supplierCode of codes) {
     const existing = await Order.findOne({ branchCode: branch.code, requestId: input.requestId, supplierCode }).lean();
     if (existing) {
-      out.push(presentOrder(existing as unknown as Lean, user));
+      out.push(presentOrder(existing as unknown as Lean));
       continue;
     }
     try {
@@ -124,18 +98,17 @@ export async function submitOrder(user: AuthUser, input: { requestId: string; no
         branchName: branch.name,
         supplierCode,
         supplierName: supplierName.get(supplierCode) ?? supplierCode,
-        lines,
         status: 'submitted',
         ...(input.note ? { note: input.note } : {}),
         history: [{ status: 'submitted', at: now, by: user.username }],
         createdBy: user.username,
       });
-      out.push(presentOrder(created.toObject() as unknown as Lean, user));
+      out.push(presentOrder(created.toObject() as unknown as Lean));
     } catch (e) {
       if (!isDuplicateKey(e)) throw e;
       const raced = await Order.findOne({ branchCode: branch.code, requestId: input.requestId, supplierCode }).lean();
       if (!raced) throw e;
-      out.push(presentOrder(raced as unknown as Lean, user));
+      out.push(presentOrder(raced as unknown as Lean));
     }
   }
   return out;
@@ -147,7 +120,7 @@ async function loadFor(user: AuthUser, id: string) {
   if (!o || (user.role === 'branch' && o.branchCode !== user.branchCode)) throw new HttpError(404, 'not_found');
   return o as unknown as Lean;
 }
-export const getOrder = async (user: AuthUser, id: string) => presentOrder(await loadFor(user, id), user);
+export const getOrder = async (user: AuthUser, id: string) => presentOrder(await loadFor(user, id));
 
 export async function transitionOrder(
   user: AuthUser,
@@ -186,28 +159,11 @@ export async function transitionOrder(
       { returnDocument: 'after' },
     ).lean();
     if (!updated) throw new HttpError(409, 'conflict', 'The order was changed by someone else; refresh and retry');
-    return presentOrder(updated as unknown as Lean, user);
+    return presentOrder(updated as unknown as Lean);
   } catch (e) {
     if (isDuplicateKey(e)) throw new HttpError(409, 'po_in_use', 'That PO number is already used on another order');
     throw e;
   }
-}
-
-export async function editLines(user: AuthUser, id: string, edits: QtyLine[]) {
-  const o = await loadFor(user, id);
-  if (o.status !== 'submitted') throw new HttpError(409, 'locked', 'Only submitted orders can be edited');
-  const r = applyLineEdits(o.lines, edits);
-  if (!r.ok) throw new HttpError(422, 'invalid_lines', r.error);
-  const updated = await Order.findOneAndUpdate(
-    { _id: id, status: 'submitted' },
-    {
-      $set: { lines: r.lines, ...(o.originalLines?.length ? {} : { originalLines: o.lines }) },
-      $push: { history: { status: 'submitted', at: new Date(), by: user.username, note: 'Quantities edited by HQ' } },
-    },
-    { returnDocument: 'after' },
-  ).lean();
-  if (!updated) throw new HttpError(409, 'conflict', 'The order was changed by someone else; refresh and retry');
-  return presentOrder(updated as unknown as Lean, user);
 }
 
 export async function setPo(user: AuthUser, id: string, raw: string) {
@@ -225,7 +181,7 @@ export async function setPo(user: AuthUser, id: string, raw: string) {
       },
       { returnDocument: 'after' },
     ).lean();
-    return presentOrder(updated as unknown as Lean, user);
+    return presentOrder(updated as unknown as Lean);
   } catch (e) {
     if (isDuplicateKey(e)) throw new HttpError(409, 'po_in_use', 'That PO number is already used on another order');
     throw e;
@@ -251,7 +207,7 @@ export function buildFilter(user: AuthUser, f: OrderFilter): Record<string, unkn
   if (f.from || f.to) q.createdAt = { ...(f.from ? { $gte: f.from } : {}), ...(f.to ? { $lt: f.to } : {}) };
   if (f.q) {
     const re = new RegExp(escapeRe(f.q.trim()), 'i');
-    q.$or = [{ orderNo: re }, { poNumber: re }, { branchName: re }, { supplierName: re }, { 'lines.itemNo': re }];
+    q.$or = [{ orderNo: re }, { poNumber: re }, { branchName: re }, { supplierName: re }];
   }
   return q;
 }
@@ -262,7 +218,7 @@ export async function listOrders(user: AuthUser, f: OrderFilter, limit: number, 
     Order.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
     Order.countDocuments(filter),
   ]);
-  return { total, orders: rows.map((r) => presentOrder(r as unknown as Lean, user)) };
+  return { total, orders: rows.map((r) => presentOrder(r as unknown as Lean)) };
 }
 
 export async function statusCounts(user: AuthUser): Promise<Record<string, number>> {
@@ -273,16 +229,15 @@ export async function statusCounts(user: AuthUser): Promise<Record<string, numbe
   return Object.fromEntries(rows.map((r) => [r._id, r.n]));
 }
 
-/** The branch's most recent order for a supplier, for the "repeat last order" button. */
-export async function lastOrderLines(user: AuthUser, supplierCode: string) {
-  const o = await Order.findOne({ branchCode: user.branchCode, supplierCode: supplierCode.toUpperCase(), status: { $ne: 'cancelled' } })
-    .sort({ createdAt: -1 })
-    .lean();
-  return o ? (o.lines as unknown as OrderLine[]).map((l) => l.itemNo) : [];
+/** Suppliers on the branch's most recent submission, for the "repeat my last order" button. */
+export async function lastSupplierCodes(user: AuthUser): Promise<string[]> {
+  const last = await Order.findOne({ branchCode: user.branchCode }).sort({ createdAt: -1 }).lean();
+  if (!last) return [];
+  const same = await Order.find({ branchCode: user.branchCode, requestId: last.requestId }, { supplierCode: 1 }).lean();
+  return same.map((o) => o.supplierCode);
 }
 
 export async function ordersForExport(f: OrderFilter) {
-  const rows = await Order.find(buildFilter({ role: 'hq' } as AuthUser, f)).sort({ branchCode: 1, createdAt: 1 }).lean();
-  // HQ-only export: raw lines keep their quantities.
-  return rows.map((r) => ({ ...presentOrder(r as unknown as Lean), lines: (r.lines as unknown as OrderLine[]).map((l) => ({ itemNo: l.itemNo, description: l.description, qty: l.qty })) }));
+  const rows = await Order.find(buildFilter({ role: 'hq' } as AuthUser, f)).sort({ supplierName: 1, branchCode: 1, createdAt: 1 }).lean();
+  return rows.map((r) => presentOrder(r as unknown as Lean));
 }

@@ -1,6 +1,6 @@
 import express, { Router } from 'express';
 import type { Env } from '../config/env';
-import { Branch, Item, Replenishment, Supplier } from '../models/catalog';
+import { Branch, Supplier } from '../models/catalog';
 import { User } from '../models/User';
 import { createUserSchema } from '../schemas/order';
 import { hashPassword, requireAuth, requireRole, tempPassword } from '../services/auth';
@@ -9,7 +9,7 @@ import { HttpError } from '../services/orderService';
 import { Order } from '../models/Order';
 import { requeueFailedLedger } from '../services/orderLedgerWorker';
 
-const KINDS: readonly ImportKind[] = ['suppliers', 'items', 'branches', 'quantities'];
+const KINDS: readonly ImportKind[] = ['suppliers', 'branches'];
 
 export function adminRouter(env: Env): Router {
   const r = Router();
@@ -35,14 +35,7 @@ export function adminRouter(env: Env): Router {
       const demo = (await Branch.find({ code: { $in: codes }, simulated: true }, { code: 1 }).lean()).map((b) => b.code);
       if (demo.length) {
         await User.deleteMany({ role: 'branch', branchCode: { $in: demo } });
-        await Replenishment.deleteMany({ branchCode: { $in: demo }, simulated: true });
       }
-    }
-    if (kind === 'quantities') {
-      // Real quantities replace any demo rules for those branches; "replace" also drops older real rules,
-      // which is how HQ removes an item from a branch's list.
-      const codes = [...new Set(rows.map((r) => (r.branchCode ?? '').toUpperCase()).filter(Boolean))];
-      await Replenishment.deleteMany({ branchCode: { $in: codes }, ...(req.query.replace === 'true' ? {} : { simulated: true }) });
     }
     const result = await importRows(kind, rows);
     // Optionally create a login per imported branch (username = branch code, random temp password).
@@ -130,17 +123,15 @@ export function adminRouter(env: Env): Router {
     res.json({ ok: true });
   });
 
-  /** Deletes the simulated branches, their logins and orders, and the simulated products. Real data is untouched. */
+  /** Deletes the simulated branches with their logins and orders. Real data is untouched. */
   r.post('/demo/clear', async (_req, res) => {
     const demoBranches = (await Branch.find({ simulated: true }, { code: 1 }).lean()).map((b) => b.code);
-    const [orders, users, branches, items, rules] = await Promise.all([
+    const [orders, users, branches] = await Promise.all([
       Order.deleteMany({ branchCode: { $in: demoBranches } }),
       User.deleteMany({ role: 'branch', branchCode: { $in: demoBranches } }),
       Branch.deleteMany({ simulated: true }),
-      Item.deleteMany({ simulated: true }),
-      Replenishment.deleteMany({ $or: [{ simulated: true }, { branchCode: { $in: demoBranches } }] }),
     ]);
-    res.json({ orders: orders.deletedCount, users: users.deletedCount, branches: branches.deletedCount, items: items.deletedCount, rules: rules.deletedCount });
+    res.json({ orders: orders.deletedCount, users: users.deletedCount, branches: branches.deletedCount });
   });
 
   r.post('/ledger/retry-failed', async (_req, res) => {
@@ -148,14 +139,13 @@ export function adminRouter(env: Env): Router {
   });
 
   r.get('/stats', async (_req, res) => {
-    const [suppliers, items, branches, demoItems, ledger] = await Promise.all([
+    const [suppliers, branches, demoBranches, ledger] = await Promise.all([
       Supplier.countDocuments(),
-      Item.countDocuments({ active: true }),
       Branch.countDocuments(),
-      Item.countDocuments({ simulated: true }),
+      Branch.countDocuments({ simulated: true }),
       Order.aggregate<{ _id: string; n: number }>([{ $match: { ledgerStatus: { $exists: true } } }, { $group: { _id: '$ledgerStatus', n: { $sum: 1 } } }]),
     ]);
-    res.json({ suppliers, items, branches, hasDemoData: demoItems > 0, ledger: Object.fromEntries(ledger.map((l) => [l._id, l.n])) });
+    res.json({ suppliers, branches, hasDemoData: demoBranches > 0, ledger: Object.fromEntries(ledger.map((l) => [l._id, l.n])) });
   });
 
   return r;

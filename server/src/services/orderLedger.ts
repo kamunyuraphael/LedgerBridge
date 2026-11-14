@@ -7,25 +7,14 @@ import {
   type SheetsApi,
   type TabLayout,
 } from './googleSheetsLedger';
-import { STATUS_LABELS, type OrderLine, type OrderStatus } from './orderLogic';
+import { STATUS_LABELS, type OrderStatus } from './orderLogic';
 import { logger } from '../utils/logger';
 
-export const ORDER_HEADER = [
-  'Approved (EAT)',
-  'Order No.',
-  'PO No.',
-  'Branch',
-  'Supplier',
-  'Item No.',
-  'Description',
-  'Qty',
-  'Status',
-  'Record ID',
-];
-export const ORDER_LAYOUT: TabLayout = { headerCols: 10, visibleCols: 9, widths: [150, 150, 120, 170, 200, 100, 320, 70, 130] };
-const RECORD_ID_COL = 9;
+export const ORDER_HEADER = ['Approved (EAT)', 'Order No.', 'PO No.', 'Branch', 'Supplier', 'Status', 'Record ID'];
+export const ORDER_LAYOUT: TabLayout = { headerCols: 7, visibleCols: 6, widths: [150, 150, 120, 170, 280, 140] };
+const RECORD_ID_COL = 6;
 const PO_COL = 2;
-const STATUS_COL = 8;
+const STATUS_COL = 5;
 
 const ORDER_FORMATS: readonly ColumnFormat[] = [
   CELL_FORMATS[0]!, // date-time
@@ -33,9 +22,6 @@ const ORDER_FORMATS: readonly ColumnFormat[] = [
   { numberFormat: { type: 'TEXT', pattern: '@' }, horizontalAlignment: 'CENTER' },
   { horizontalAlignment: 'LEFT' },
   { horizontalAlignment: 'LEFT' },
-  { numberFormat: { type: 'TEXT', pattern: '@' }, horizontalAlignment: 'LEFT' },
-  { horizontalAlignment: 'LEFT' },
-  { numberFormat: { type: 'NUMBER', pattern: '#,##0' }, horizontalAlignment: 'RIGHT' },
   { horizontalAlignment: 'CENTER' },
   { horizontalAlignment: 'LEFT' },
 ];
@@ -47,14 +33,12 @@ export interface OrderLedgerRow {
   branchName: string;
   supplierName: string;
   status: OrderStatus;
-  lines: OrderLine[];
 }
 
 export interface OrderLedgerSink {
   sync(tab: string, order: OrderLedgerRow): Promise<{ created: boolean; added: number; updated: number }>;
 }
 
-export const rowId = (orderNo: string, itemNo: string): string => `${orderNo}:${itemNo}`;
 const EAT_MS = 3 * 3600_000;
 /** Spreadsheet date-times carry no zone, so store Nairobi wall-clock time. */
 const eatSerial = (d: Date): number => toSerialDate(new Date(d.getTime() + EAT_MS));
@@ -66,9 +50,9 @@ export function orderTabFor(prefix: string, approvedAt: Date): string {
 }
 
 /**
- * Keeps one Google Sheet tab per month with a row per order line. Idempotent: lines are matched by a
- * hidden Record ID (orderNo:itemNo). Re-syncing an order only refreshes its PO number and status cells,
- * so the sheet always shows the latest state without duplicating rows.
+ * Keeps one Google Sheet tab per month with one row per order (branch + supplier). Idempotent: the row is
+ * matched by a hidden Record ID (the order number). Re-syncing only refreshes the PO number and status
+ * cells, so the sheet always shows the latest state without duplicating rows.
  */
 export class GoogleSheetsOrderLedger implements OrderLedgerSink {
   constructor(private readonly api: SheetsApi) {}
@@ -91,30 +75,18 @@ export class GoogleSheetsOrderLedger implements OrderLedgerSink {
     if (sheetId === undefined) throw new GraphError(`Could not find or create tab "${tab}"`, 'transient');
 
     const ids = await this.api.readColumn(tab, RECORD_ID_COL);
-    const rowOf = new Map<string, number>();
-    ids.forEach((id, i) => {
-      if (id) rowOf.set(id, i + 2);
-    });
-
+    const row = ids.findIndex((id) => id === o.orderNo);
     const statusText = STATUS_LABELS[o.status];
     const po = o.poNumber ?? '';
-    const fresh = o.lines.filter((l) => !rowOf.has(rowId(o.orderNo, l.itemNo)));
-    if (fresh.length) {
-      await this.api.appendRows(
-        sheetId,
-        fresh.map((l) => [eatSerial(o.approvedAt), o.orderNo, po, o.branchName, o.supplierName, l.itemNo, l.description, l.qty, statusText, rowId(o.orderNo, l.itemNo)]),
-        ORDER_FORMATS,
-      );
+    if (row === -1) {
+      await this.api.appendRows(sheetId, [[eatSerial(o.approvedAt), o.orderNo, po, o.branchName, o.supplierName, statusText, o.orderNo]], ORDER_FORMATS);
+      return { created, added: 1, updated: 0 };
     }
-
-    const updates: { row: number; col: number; value: string }[] = [];
-    for (const l of o.lines) {
-      const row = rowOf.get(rowId(o.orderNo, l.itemNo));
-      if (row === undefined) continue;
-      updates.push({ row, col: PO_COL, value: po }, { row, col: STATUS_COL, value: statusText });
-    }
-    await this.api.updateCells(tab, updates);
-    return { created, added: fresh.length, updated: updates.length / 2 };
+    await this.api.updateCells(tab, [
+      { row: row + 2, col: PO_COL, value: po },
+      { row: row + 2, col: STATUS_COL, value: statusText },
+    ]);
+    return { created, added: 0, updated: 1 };
   }
 }
 

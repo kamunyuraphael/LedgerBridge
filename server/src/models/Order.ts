@@ -1,14 +1,5 @@
 import { Schema, model } from 'mongoose';
 
-const lineSchema = new Schema(
-  {
-    itemNo: { type: String, required: true },
-    description: { type: String, required: true },
-    qty: { type: Number, required: true, min: 1 },
-  },
-  { _id: false },
-);
-
 const historySchema = new Schema(
   {
     status: { type: String, required: true },
@@ -28,9 +19,6 @@ const orderSchema = new Schema(
     branchName: { type: String, required: true },
     supplierCode: { type: String, required: true },
     supplierName: { type: String, required: true },
-    lines: { type: [lineSchema], required: true },
-    /** Lines as the branch first submitted them; set only when HQ edits quantities. */
-    originalLines: { type: [lineSchema], default: undefined },
     status: {
       type: String,
       enum: ['submitted', 'approved', 'rejected', 'sent', 'fulfilled', 'cancelled'],

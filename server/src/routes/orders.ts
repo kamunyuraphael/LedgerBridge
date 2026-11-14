@@ -2,13 +2,12 @@ import { Router, type Request } from 'express';
 import rateLimit from 'express-rate-limit';
 import ExcelJS from 'exceljs';
 import type { Env } from '../config/env';
-import { editLinesSchema, poSchema, submitOrderSchema, transitionSchema } from '../schemas/order';
+import { poSchema, submitOrderSchema, transitionSchema } from '../schemas/order';
 import { requireAuth, requireRole } from '../services/auth';
 import {
-  editLines,
   getOrder,
   HttpError,
-  lastOrderLines,
+  lastSupplierCodes,
   listOrders,
   ordersForExport,
   setPo,
@@ -17,7 +16,7 @@ import {
   transitionOrder,
   type OrderFilter,
 } from '../services/orderService';
-import { ORDER_STATUSES, totalsByItem, type OrderStatus } from '../services/orderLogic';
+import { ORDER_STATUSES, STATUS_LABELS, type OrderStatus } from '../services/orderLogic';
 
 const str = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
 const status = (v: unknown): OrderStatus | undefined => ORDER_STATUSES.find((s) => s === v);
@@ -79,25 +78,31 @@ export function ordersRouter(env: Env): Router {
     res.json(await statusCounts(req.user!));
   });
 
-  r.get('/template/:supplierCode', branch, async (req, res) => {
-    res.json({ itemNos: await lastOrderLines(req.user!, String(req.params.supplierCode)) });
+  r.get('/last', branch, async (req, res) => {
+    res.json({ supplierCodes: await lastSupplierCodes(req.user!) });
   });
 
-  /** HQ: one workbook per request: totals per item (what to tell the supplier) + per-branch breakdown. */
+  /** HQ: one workbook per request: a summary per supplier (how many branches ordered) and the order list. */
   r.get('/export', hq, async (req, res) => {
-    const f = filterFrom(req);
-    const orders = await ordersForExport(f);
+    const orders = await ordersForExport(filterFrom(req));
     const wb = new ExcelJS.Workbook();
-    const sum = wb.addWorksheet('Summary');
-    sum.addRow(['Item No.', 'Description', 'QTY']).font = { bold: true };
-    for (const row of totalsByItem(orders)) sum.addRow([row.itemNo, row.description, row.qty]);
-    sum.columns = [{ width: 14 }, { width: 52 }, { width: 10 }];
-    const by = wb.addWorksheet('By branch');
-    by.addRow(['Branch', 'Order No.', 'PO No.', 'Supplier', 'Item No.', 'Description', 'QTY']).font = { bold: true };
+    const sum = wb.addWorksheet('By supplier');
+    sum.addRow(['Supplier No.', 'Supplier', 'Orders', 'Branches']).font = { bold: true };
+    const bySupplier = new Map<string, { name: string; n: number; branches: string[] }>();
     for (const o of orders) {
-      for (const l of o.lines) by.addRow([o.branchName, o.orderNo, o.poNumber ?? '', o.supplierName, l.itemNo, l.description, l.qty]);
+      const e = bySupplier.get(o.supplierCode) ?? { name: o.supplierName, n: 0, branches: [] };
+      e.n += 1;
+      e.branches.push(o.branchCode);
+      bySupplier.set(o.supplierCode, e);
     }
-    by.columns = [{ width: 24 }, { width: 20 }, { width: 16 }, { width: 28 }, { width: 14 }, { width: 52 }, { width: 10 }];
+    for (const [code, e] of bySupplier) sum.addRow([code, e.name, e.n, e.branches.join(', ')]);
+    sum.columns = [{ width: 14 }, { width: 36 }, { width: 10 }, { width: 60 }];
+    const by = wb.addWorksheet('Orders');
+    by.addRow(['Order No.', 'Date', 'Branch No.', 'Branch', 'Supplier No.', 'Supplier', 'PO No.', 'Status']).font = { bold: true };
+    for (const o of orders) {
+      by.addRow([o.orderNo, o.createdAt.slice(0, 10), o.branchCode, o.branchName, o.supplierCode, o.supplierName, o.poNumber ?? '', STATUS_LABELS[o.status]]);
+    }
+    by.columns = [{ width: 20 }, { width: 12 }, { width: 12 }, { width: 24 }, { width: 14 }, { width: 36 }, { width: 16 }, { width: 20 }];
     const buf = Buffer.from(await wb.xlsx.writeBuffer());
     res
       .type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
@@ -113,12 +118,6 @@ export function ordersRouter(env: Env): Router {
     const p = transitionSchema.safeParse(req.body);
     if (!p.success) throw new HttpError(422, 'validation_failed');
     res.json(await transitionOrder(req.user!, String(req.params.id), p.data));
-  });
-
-  r.patch('/:id/lines', hq, async (req, res) => {
-    const p = editLinesSchema.safeParse(req.body);
-    if (!p.success) throw new HttpError(422, 'validation_failed');
-    res.json(await editLines(req.user!, String(req.params.id), p.data.lines));
   });
 
   r.patch('/:id/po', hq, async (req, res) => {

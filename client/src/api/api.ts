@@ -1,5 +1,5 @@
 import { http } from './client'
-import type { AdminStats, AdminUser, ImportResult, Item, Order, OrderFilters, Supplier, User } from './types'
+import type { AdminStats, AdminUser, ImportResult, Order, OrderFilters, Supplier, User } from './types'
 
 export interface Health {
   status: 'ok' | 'degraded'
@@ -25,16 +25,13 @@ export const api = {
     await http.post('/api/auth/change-password', { currentPassword, newPassword })
   },
 
-  async suppliers(all = false) {
-    return (await http.get<Supplier[]>('/api/catalogue/suppliers', { params: all ? { all: 'true' } : {} })).data
-  },
-  async items(supplierCode: string) {
-    return (await http.get<Item[]>('/api/catalogue/items', { params: { supplierCode } })).data
+  async suppliers() {
+    return (await http.get<Supplier[]>('/api/catalogue/suppliers')).data
   },
 
-  // Branches pick products only; HQ's standard quantities are applied on the server.
-  async submitOrder(requestId: string, itemNos: string[], note: string) {
-    return (await http.post<{ orders: Order[] }>('/api/orders', { requestId, itemNos, ...(note ? { note } : {}) })).data.orders
+  // Branches pick suppliers only; HQ's own system decides products and quantities.
+  async submitOrder(requestId: string, supplierCodes: string[], note: string) {
+    return (await http.post<{ orders: Order[] }>('/api/orders', { requestId, supplierCodes, ...(note ? { note } : {}) })).data.orders
   },
   async orders(filters: OrderFilters, skip = 0, limit = 25) {
     return (await http.get<{ total: number; orders: Order[] }>('/api/orders', { params: { ...clean(filters), skip, limit } })).data
@@ -42,14 +39,11 @@ export const api = {
   async summary() {
     return (await http.get<Record<string, number>>('/api/orders/summary')).data
   },
-  async lastLines(supplierCode: string) {
-    return (await http.get<{ itemNos: string[] }>(`/api/orders/template/${supplierCode}`)).data.itemNos
+  async lastSuppliers() {
+    return (await http.get<{ supplierCodes: string[] }>('/api/orders/last')).data.supplierCodes
   },
   async transition(id: string, to: string, extra: { reason?: string; poNumber?: string } = {}) {
     return (await http.post<Order>(`/api/orders/${id}/transition`, { to, ...extra })).data
-  },
-  async editLines(id: string, lines: { itemNo: string; qty: number }[]) {
-    return (await http.patch<Order>(`/api/orders/${id}/lines`, { lines })).data
   },
   async setPo(id: string, poNumber: string) {
     return (await http.patch<Order>(`/api/orders/${id}/po`, { poNumber })).data
@@ -63,14 +57,14 @@ export const api = {
     return (await http.get<AdminStats>('/api/admin/stats')).data
   },
   async clearDemo() {
-    return (await http.post<{ orders: number; users: number; branches: number; items: number; rules: number }>('/api/admin/demo/clear')).data
+    return (await http.post<{ orders: number; users: number; branches: number }>('/api/admin/demo/clear')).data
   },
   async retryLedger() {
     return (await http.post<{ requeued: number }>('/api/admin/ledger/retry-failed')).data
   },
-  async importFile(kind: 'suppliers' | 'items' | 'branches' | 'quantities', file: File, flag: boolean) {
+  async importFile(kind: 'suppliers' | 'branches', file: File, flag: boolean) {
     const r = await http.post<ImportResult>(`/api/admin/import/${kind}`, await file.arrayBuffer(), {
-      params: kind === 'branches' && flag ? { createAccounts: 'true' } : kind === 'quantities' && flag ? { replace: 'true' } : {},
+      params: kind === 'branches' && flag ? { createAccounts: 'true' } : {},
       headers: { 'Content-Type': 'application/octet-stream' },
       timeout: 120_000,
     })

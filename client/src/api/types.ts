@@ -13,18 +13,6 @@ export interface User {
 export interface Supplier {
   code: string
   name: string
-  itemCount: number
-}
-export interface Item {
-  itemNo: string
-  description: string
-  supplierCode: string
-}
-export interface Line {
-  itemNo: string
-  description: string
-  /** Present for HQ only; branches never receive quantities. */
-  qty?: number
 }
 export interface Order {
   id: string
@@ -34,10 +22,6 @@ export interface Order {
   supplierCode: string
   supplierName: string
   status: OrderStatus
-  lines: Line[]
-  originalLines?: Line[]
-  itemCount: number
-  totalQty?: number
   note?: string
   rejectionReason?: string
   poNumber?: string
@@ -71,7 +55,6 @@ export interface AdminUser {
 }
 export interface AdminStats {
   suppliers: number
-  items: number
   branches: number
   hasDemoData: boolean
   ledger: Record<string, number>
